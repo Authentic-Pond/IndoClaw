@@ -1,4 +1,6 @@
-# IndoClaw - Autonomous AI Agent OS
+# 🚧 IndoClaw - Autonomous AI Agent OS (Under Development)
+
+> **Note:** IndoClaw is currently under active development. The project is not yet ready for public release. We will announce when it's ready to go!
 
 IndoClaw is an autonomous AI agent operating system inspired by OpenClaw, built with LangChain for powerful AI agent capabilities.
 
@@ -194,9 +196,17 @@ flake8 src/
 mypy src/
 ```
 
+## 🚧 Development Status
+
+**Status:** Active Development
+
+This project is currently under active development and is not yet ready for public release. We're working hard to bring you a stable and powerful autonomous AI agent operating system.
+
+**Stay Updated:** Follow our repository for updates and announcements when IndoClaw is ready for its first release!
+
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions! Once the project is more stable, please feel free to submit a Pull Request.
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
