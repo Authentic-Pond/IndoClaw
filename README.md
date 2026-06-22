@@ -189,6 +189,10 @@ TAVILY_API_KEY=your_tavily_api_key
 MAX_SEARCH_RESULTS=5
 FILE_OPERATION_TIMEOUT=30
 
+# Tool Display Configuration (controls CLI output)
+SHOW_TOOL_CALLING=true
+SHOW_THINKING=true
+
 # Agent Configuration
 AGENT_NAME=IndoClaw
 AGENT_ROLE=Autonomous AI Assistant
@@ -205,7 +209,7 @@ CACHE_DIR=./data/cache
 
 | Tool | Description |
 |------|-------------|
-| `web_search` | Search the web using Tavily API |
+| `duckduckgo_search` | Web search using DuckDuckGo (default) |
 | `file_ops` | Read, write, list directories |
 | `calculator` | Safe mathematical expression evaluation |
 | `llm_call` | LLM inference via LangChain |
@@ -298,3 +302,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 ## Contact
 
 Project Link: [https://github.com/Authentic-Pond/IndoClaw](https://github.com/Authentic-Pond/IndoClaw)
+
+## Contact
+
+For support or inquiries, contact us at: **admin@indoclaw.in**

@@ -6,7 +6,15 @@ import sys
 import os
 import argparse
 import json
+import warnings
 from typing import Optional
+
+# Suppress LangChain Pydantic compatibility warnings for Python 3.14+
+warnings.filterwarnings(
+    "ignore",
+    message="Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater",
+    category=UserWarning
+)
 
 try:
     from prompt_toolkit import PromptSession, HTML
@@ -72,11 +80,7 @@ class IndoClawCLI:
         """Initialize the main agent."""
         try:
             self.agent = create_agent(
-                tools=[
-                    WebSearchTool(),
-                    FileOperationTool(),
-                    CalculatorTool()
-                ],
+                tools=None,  # Use default tools from settings
                 verbose=self.verbose
             )
             self.agents["default"] = self.agent
@@ -88,6 +92,8 @@ class IndoClawCLI:
                         border_style="green"
                     )
                 )
+            if self.verbose:
+                print(f"Using default tools: {[tool.name for tool in self.agent.tools]}")
         except Exception as e:
             if self.console:
                 self.console.print(
@@ -181,10 +187,8 @@ class IndoClawCLI:
                 
                 if not user_input:
                     continue
-                
                 if user_input.lower() in ["exit", "quit", "q"]:
                     break
-                
                 # Run agent
                 try:
                     result = self.agent.run(user_input)
@@ -198,13 +202,10 @@ class IndoClawCLI:
                     user_input = input(">> ").strip()
                 except (KeyboardInterrupt, EOFError):
                     break
-                
                 if not user_input:
                     continue
-                
                 if user_input.lower() in ["exit", "quit", "q"]:
                     break
-                
                 try:
                     result = self.agent.run(user_input)
                     self.print_response(result.response)

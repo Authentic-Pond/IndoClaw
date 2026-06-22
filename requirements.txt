@@ -6,6 +6,7 @@ pydantic
 python-dotenv
 chromadb
 tavily-python
+ddgs
 wikipedia
 requests
 beautifulsoup4
