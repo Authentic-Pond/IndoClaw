@@ -15,7 +15,7 @@ IndoClaw is an autonomous AI agent operating system inspired by OpenClaw, built 
 ```
 IndoClaw/
 ├── src/
-│   ├── core/               # Core agent system
+│   ├── core/              # Core agent system
 │   │   ├── agent.py       # Main agent with perception-reasoning-action loop
 │   │   ├── memory/        # Memory management
 │   │   ├── planning/      # Task planning
@@ -37,8 +37,8 @@ IndoClaw/
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/indoclaw.git
-cd indoclaw
+git clone https://github.com/Authentic-Pond/IndoClaw.git
+cd IndoClaw
 
 # Create virtual environment (optional but recommended)
 python -m venv venv
@@ -217,4 +217,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Contact
 
-Project Link: [https://github.com/your-username/indoclaw](https://github.com/your-username/indoclaw)
+Project Link: [https://github.com/Authentic-Pond/IndoClaw](https://github.com/Authentic-Pond/IndoClaw)
