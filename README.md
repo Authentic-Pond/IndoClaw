@@ -37,6 +37,16 @@ IndoClaw/
 
 ## Installation
 
+### Option 1: Install from PyPI (recommended)
+
+Once published to PyPI, you can install IndoClaw with:
+
+```bash
+pip install indoclaw
+```
+
+### Option 2: Install from source
+
 ```bash
 # Clone the repository
 git clone https://github.com/Authentic-Pond/IndoClaw.git
@@ -49,6 +59,9 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
+# Install as a package (development mode)
+pip install -e .
+
 # Copy environment example
 cp src/config/.env.example src/config/.env
 
@@ -57,22 +70,71 @@ cp src/config/.env.example src/config/.env
 # TAVILY_API_KEY=your_tavily_key_here (optional)
 ```
 
+### Adding `indoclaw` to PATH (Windows)
+
+After installation, the `indoclaw.exe` script is installed in Python's Scripts directory.
+To run `indoclaw` from any directory, add the Scripts directory to your PATH:
+
+1. Open **Settings** > **System** > **About** > **Advanced system settings**
+2. Click **Environment Variables**
+3. Under **User variables**, select **Path** and click **Edit**
+4. Click **New** and add: `C:\Users\YOUR_USERNAME\AppData\Local\Python\pythonX.X\Scripts`
+5. Click **OK** to save
+
+Alternatively, you can run IndoClaw using:
+```bash
+python -m src
+```
+or
+```bash
+python -m src --help
+```
+
 ## Usage
 
-### Command Line Interface
+### Command Line Interface (after installation)
 
 ```bash
 # Interactive chat mode
-python -m src
+indoclaw
 
 # Single prompt
-python -m src "What is 25 * 17?"
+indoclaw "What is 25 * 17?"
 
 # Research mode
-python -m src --research "Latest AI developments"
+indoclaw --research "Latest AI developments"
 
 # Writing mode
-python -m src --write "The future of technology" --format article
+indoclaw --write "The future of technology" --format article
+
+# Verbose mode
+indoclaw -v
+
+# Run chat mode explicitly
+indoclaw --chat
+```
+
+### Programmatic Usage
+
+```python
+from src.core.agent import create_agent
+from src.agents.researcher import ResearcherAgent
+from src.agents.writer import WriterAgent
+
+# Create a general-purpose agent
+agent = create_agent(verbose=True)
+result = agent.run("Solve this math problem: 123 * 456")
+print(result.response)
+
+# Use a specialized researcher agent
+researcher = ResearcherAgent(verbose=True)
+result = researcher.research("Quantum computing advances")
+print(result.summary)
+
+# Use a writer agent
+writer = WriterAgent(verbose=True)
+result = writer.write("Artificial Intelligence trends", format="article")
+print(result.content)
 ```
 
 ### Programmatic Usage
@@ -216,7 +278,15 @@ We welcome contributions! Once the project is more stable, please feel free to s
 
 ## License
 
-This project is licensed under the Apache 2.0 License - see the LICENSE file for details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+---
+**Apache License 2.0 Summary:**
+
+- Free to use, modify, and distribute
+- Must include original copyright notice
+- Changes must be documented
+- No trademark license granted
 
 ## Acknowledgments
 

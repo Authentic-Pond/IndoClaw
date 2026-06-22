@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "indoclaw"
+version = "0.1.0"
+description = "IndoClaw - Autonomous AI Agent OS with CLI"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "IndoClaw Team", email = "authentic.pond@example.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "langchain",
+    "langchain-openai",
+    "langchain-community",
+    "langgraph",
+    "pydantic",
+    "python-dotenv",
+    "chromadb",
+    "tavily-python",
+    "wikipedia",
+    "requests",
+    "beautifulsoup4",
+    "prompt-toolkit",
+    "rich",
+    "pyyaml",
+]
+
+[project.scripts]
+indoclaw = "src.interfaces.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Authentic-Pond/IndoClaw"
+Documentation = "https://github.com/Authentic-Pond/IndoClaw/blob/main/README.md"
+Repository = "https://github.com/Authentic-Pond/IndoClaw.git"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.setuptools.package-data]
+src = ["config/.env.example"]
