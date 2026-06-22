@@ -9,7 +9,7 @@ description = "IndoClaw - Autonomous AI Agent OS with CLI"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 authors = [
-    {name = "IndoClaw Team", email = "authentic.pond@example.com"}
+    {name = "IndoClaw Team", email = "admin@indoclaw.in"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -32,6 +32,7 @@ dependencies = [
     "python-dotenv",
     "chromadb",
     "tavily-python",
+    "ddgs",
     "wikipedia",
     "requests",
     "beautifulsoup4",

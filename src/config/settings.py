@@ -41,6 +41,8 @@ class ToolConfig:
     tavily_api_key: Optional[str] = os.getenv("TAVILY_API_KEY")
     max_web_search_results: int = int(os.getenv("MAX_SEARCH_RESULTS", "5"))
     file_operation_timeout: int = int(os.getenv("FILE_OPERATION_TIMEOUT", "30"))
+    show_tool_calling: bool = os.getenv("SHOW_TOOL_CALLING", "true").lower() == "true"
+    show_thinking: bool = os.getenv("SHOW_THINKING", "true").lower() == "true"
 
 
 @dataclass

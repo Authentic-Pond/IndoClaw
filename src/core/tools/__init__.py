@@ -7,6 +7,7 @@ from .web_search import WebSearchTool
 from .file_ops import FileOperationTool
 from .calculation import CalculatorTool
 from .llm_call import LLMCallTool
+from .duckduckgo_search import DuckDuckGoSearchTool
 
 __all__ = [
     "BaseTool",
@@ -14,4 +15,5 @@ __all__ = [
     "FileOperationTool",
     "CalculatorTool",
     "LLMCallTool",
+    "DuckDuckGoSearchTool",
 ]

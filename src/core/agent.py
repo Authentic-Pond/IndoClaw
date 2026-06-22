@@ -104,8 +104,14 @@ class IndoClawAgent:
         self.tools = tools or self._default_tools()
         self.tool_map = {tool.name: tool for tool in self.tools}
         
-        # Initialize memory
-        self.short_term_memory = ShortTermMemory(settings.memory.short_term_capacity)
+        # Initialize memory - use absolute path based on project directory
+        import os
+        project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        storage_path = os.path.join(project_dir, "data", "short_term_memory.json")
+        self.short_term_memory = ShortTermMemory(
+            settings.memory.short_term_capacity,
+            storage_path=storage_path
+        )
         self.long_term_memory = long_term_memory
         
         # Set up prompts
@@ -120,9 +126,9 @@ class IndoClawAgent:
     
     def _default_tools(self) -> List[BaseTool]:
         """Create default tools for the agent."""
+        from .tools.duckduckgo_search import DuckDuckGoSearchTool
         return [
-            WebSearchTool(
-                api_key=settings.tool.tavily_api_key,
+            DuckDuckGoSearchTool(
                 max_results=settings.tool.max_web_search_results
             ),
             FileOperationTool(),
@@ -169,6 +175,27 @@ When task is complete, respond with FINAL_ANSWER: Your final response"""
         if self.verbose:
             print(f"[{self.name}] {message}")
     
+    def _show_thinking(self, thought: str) -> None:
+        """Display thinking output if enabled in settings."""
+        if settings.tool.show_thinking:
+            print(f"\n[THOUGHT]\n{thought}\n")
+    
+    def _show_tool_calling(self, action: str, action_input: str, result: ToolResult = None) -> None:
+        """Display tool calling output if enabled in settings."""
+        if settings.tool.show_tool_calling:
+            if action:
+                print(f"\n[TOOL CALLING]")
+                print(f"Tool: {action}")
+                print(f"Input: {action_input}")
+                if result:
+                    if result.success:
+                        print(f"Status: Success")
+                        print(f"Output: {result.content}")
+                    else:
+                        print(f"Status: Failed")
+                        print(f"Error: {result.error}")
+                print()
+    
     def _get_memory_context(self, query: str) -> List[Dict[str, str]]:
         """Get relevant context from memory."""
         context = []
@@ -193,18 +220,27 @@ When task is complete, respond with FINAL_ANSWER: Your final response"""
         # Get memory context
         memory_context = self._get_memory_context(input_text)
         
-        # Build prompt
-        prompt = f"""{self.system_prompt}
-
-Current task: {input_text}
-
-Memory context:
-{chr(10).join([f'- {msg["role"]}: {msg["content"][:200]}...' for msg in memory_context])}
-
-Begin your thinking process:"""
+        # Build messages with proper format for LangChain
+        messages = []
+        
+        # Add system prompt
+        messages.append(SystemMessage(content=self.system_prompt))
+        
+        # Add memory context as messages
+        for msg in memory_context:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if role == "user":
+                messages.append(HumanMessage(content=content))
+            elif role == "assistant":
+                messages.append(AIMessage(content=content))
+            else:
+                messages.append(SystemMessage(content=f"System: {content}"))
+        
+        # Add current task
+        messages.append(HumanMessage(content=f"Current task: {input_text}\n\nPlease think about this task and provide your response."))
         
         # Get LLM response
-        messages = [HumanMessage(content=prompt)]
         response = self.llm.invoke(messages)
         
         thought = response.content.strip()
@@ -258,8 +294,14 @@ Begin your thinking process:"""
                 error=f"Tool disabled: {state.action}"
             )
         
+        # Show tool calling output before execution
+        self._show_tool_calling(state.action, state.action_input)
+        
         try:
             result = tool.execute(state.action_input)
+            
+            # Show tool calling output after execution (with result)
+            self._show_tool_calling(state.action, state.action_input, result)
             
             # Update long-term memory
             if result.success:
@@ -312,6 +354,10 @@ Begin your thinking process:"""
         for iteration in range(self.max_iterations):
             # Perceive and reason
             state = self._think(input_text)
+            
+            # Show thinking output if enabled
+            self._show_thinking(state.thought)
+            
             self._update_memory(state, ToolResult(success=False))  # Pre-update
             
             # Check if we have a final answer
