@@ -216,7 +216,7 @@ We welcome contributions! Once the project is more stable, please feel free to s
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the Apache 2.0 License - see the LICENSE file for details.
 
 ## Acknowledgments
 
