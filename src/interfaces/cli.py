@@ -95,20 +95,21 @@ class IndoClawCLI:
             self._initialize_agent()
     
     def _print_logo(self) -> None:
-        """Print the IndoClaw ASCII logo."""
+        """Print the IndoClaw ASCII logo in green color."""
         logo = """
-██╗███╗   ██╗██████╗  ██████╗  ██████╗██╗      █████╗ ██╗    ██╗
+[bold green]██╗███╗   ██╗██████╗  ██████╗  ██████╗██╗      █████╗ ██╗    ██╗
 ██║████╗  ██║██╔══██╗██╔═══██╗██╔════╝██║     ██╔══██╗██║    ██║
 ██║██╔██╗ ██║██║  ██║██║   ██║██║     ██║     ███████║██║ █╗ ██║
 ██║██║╚██╗██║██║  ██║██║   ██║██║     ██║     ██╔══██║██║███╗██║
 ██║██║ ╚████║██████╔╝╚██████╔╝╚██████╗███████╗██║  ██║╚███╔███╔╝
-╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝  ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ 
-                                                                
+╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝  ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝[/bold green] 
+               [bold green]                           [/bold green]      
         """
         if self.console:
             self.console.print(logo)
         else:
-            print(logo)
+            # Fallback for non-Rich environments
+            print(logo.replace("[bold green]", "").replace("[/bold green]", ""))
     
     def _initialize_agent(self) -> None:
         """Initialize the main agent."""
@@ -116,41 +117,46 @@ class IndoClawCLI:
             from src.core.workspace.config import get_agent_config
             from src.config.settings import Settings, LLMConfig, AgentConfig, ToolConfig, MemoryConfig
             
+            # Use self.agent_name directly (passed from __main__.py)
+            agent_name = self.agent_name
+            if not agent_name or agent_name == "default":
+                # Fallback to default agent name from settings
+                agent_name = settings.agent.name
+            
             # Load agent-specific config
-            agent_name = settings.agent.name  # Default agent name
-            # If agent_name is not "default", load agent-specific config
-            if self.agent_name and self.agent_name != "default":
-                config = get_agent_config(agent_name=self.agent_name).load()
-                agent_name = config.get("agent_name", agent_name)
-                
-                # Reload settings with agent-specific config
-                llm_config = LLMConfig()
-                llm_config.model_name = config.get("llm_model", getattr(llm_config, 'model_name', None))
-                llm_config.base_url = config.get("llm_base_url", getattr(llm_config, 'base_url', None))
-                llm_config.api_key = config.get("llm_api_key", getattr(llm_config, 'api_key', None))
-                llm_config.ollama_enabled = config.get("ollama_enabled", getattr(llm_config, 'ollama_enabled', True))
-                
-                agent_config = AgentConfig()
-                agent_config.name = config.get("agent_name", getattr(agent_config, 'name', None))
-                agent_config.role = config.get("agent_role", getattr(agent_config, 'role', None))
-                agent_config.max_iterations = config.get("max_iterations", getattr(agent_config, 'max_iterations', 10))
-                agent_config.verbose = config.get("verbose", getattr(agent_config, 'verbose', True))
-                
-                tool_config = ToolConfig()
-                tool_config.show_tool_calling = config.get("show_tool_calling", getattr(tool_config, 'show_tool_calling', False))
-                tool_config.show_thinking = config.get("show_thinking", getattr(tool_config, 'show_thinking', False))
-                tool_config.thinking_enabled = config.get("thinking_enabled", getattr(tool_config, 'thinking_enabled', True))
-                
-                memory_config = MemoryConfig()
-                memory_config.short_term_capacity = config.get("short_term_capacity", getattr(memory_config, 'short_term_capacity', 10))
-                memory_config.long_term_top_k = config.get("long_term_top_k", getattr(memory_config, 'long_term_top_k', 5))
-                memory_config.embedding_model = config.get("embedding_model", getattr(memory_config, 'embedding_model', None))
-                
-                # Update global settings
-                settings.llm = llm_config
-                settings.agent = agent_config
-                settings.tool = tool_config
-                settings.memory = memory_config
+            if agent_name and agent_name != "default":
+                config = get_agent_config(agent_name=agent_name).load()
+                if config:
+                    agent_name = config.get("agent_name", agent_name)
+                    
+                    # Reload settings with agent-specific config
+                    llm_config = LLMConfig()
+                    llm_config.model_name = config.get("llm_model", getattr(llm_config, 'model_name', None))
+                    llm_config.base_url = config.get("llm_base_url", getattr(llm_config, 'base_url', None))
+                    llm_config.api_key = config.get("llm_api_key", getattr(llm_config, 'api_key', None))
+                    llm_config.ollama_enabled = config.get("ollama_enabled", getattr(llm_config, 'ollama_enabled', True))
+                    
+                    agent_config = AgentConfig()
+                    agent_config.name = config.get("agent_name", getattr(agent_config, 'name', None))
+                    agent_config.role = config.get("agent_role", getattr(agent_config, 'role', None))
+                    agent_config.max_iterations = config.get("max_iterations", getattr(agent_config, 'max_iterations', 10))
+                    agent_config.verbose = config.get("verbose", getattr(agent_config, 'verbose', True))
+                    
+                    tool_config = ToolConfig()
+                    tool_config.show_tool_calling = config.get("show_tool_calling", getattr(tool_config, 'show_tool_calling', False))
+                    tool_config.show_thinking = config.get("show_thinking", getattr(tool_config, 'show_thinking', False))
+                    tool_config.thinking_enabled = config.get("thinking_enabled", getattr(tool_config, 'thinking_enabled', True))
+                    
+                    memory_config = MemoryConfig()
+                    memory_config.short_term_capacity = config.get("short_term_capacity", getattr(memory_config, 'short_term_capacity', 10))
+                    memory_config.long_term_top_k = config.get("long_term_top_k", getattr(memory_config, 'long_term_top_k', 5))
+                    memory_config.embedding_model = config.get("embedding_model", getattr(memory_config, 'embedding_model', None))
+                    
+                    # Update global settings
+                    settings.llm = llm_config
+                    settings.agent = agent_config
+                    settings.tool = tool_config
+                    settings.memory = memory_config
             
             self.agent = create_agent(
                 tools=None,  # Use default tools from settings
@@ -568,14 +574,6 @@ def main() -> None:
         command = remaining[0] if remaining else None
         prompt = remaining[1] if len(remaining) > 1 else None
         
-        # Check if command is an agent name (exists in workspace folder)
-        workspace_base = Path.home() / "IndoClaw" / "workspaces"
-        if workspace_base.exists():
-            agent_folder = workspace_base / command
-            if agent_folder.exists() and (agent_folder / "agent_config.json").exists():
-                agent_name = command
-                command = None  # Clear command since it's an agent name
-        
         if command == "uninstall":
             from ..__main__ import uninstall
             uninstall(full=args.full if hasattr(args, 'full') else False)
@@ -597,7 +595,7 @@ def main() -> None:
             cli = IndoClawCLI(verbose=args.verbose, init_agent=True, agent_name=agent_name)
             cli.run(prompt=command if command else prompt, chat=not args.research and not args.write)
     else:
-        cli = IndoClawCLI(verbose=args.verbose, init_agent=True)
+        cli = IndoClawCLI(verbose=args.verbose, init_agent=True, agent_name=agent_name)
         cli.run(prompt=prompt, chat=not args.research and not args.write)
 
 

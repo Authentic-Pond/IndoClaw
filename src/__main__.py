@@ -22,6 +22,10 @@ except ImportError:
     WORKSPACE_AVAILABLE = False
 
 
+# Global settings file path
+INDOCLAW_SETTINGS_FILE = Path.home() / ".indoclaw" / "settings.json"
+
+
 def is_onboarded() -> bool:
     """
     Check if the user has run the onboard process.
@@ -35,23 +39,39 @@ def is_onboarded() -> bool:
     try:
         from pathlib import Path
         
+        # Check if .indoclaw folder exists
+        indo_claw_dir = Path.home() / ".indoclaw"
+        if not indo_claw_dir.exists():
+            return False
+        
+        # Check if settings.json exists
+        settings_file = indo_claw_dir / "settings.json"
+        if not settings_file.exists():
+            return False
+        
+        # Load settings to get default agent
+        import json
+        with open(settings_file, 'r', encoding='utf-8') as f:
+            settings = json.load(f)
+        
+        default_agent = settings.get("default_agent", "default")
+        
         # Check if workspaces folder exists
-        workspaces_dir = Path.home() / "IndoClaw" / "workspaces"
+        workspaces_dir = indo_claw_dir / "workspaces"
         if not workspaces_dir.exists():
             return False
         
         # Check if default agent folder exists
-        default_dir = workspaces_dir / "default"
-        if not default_dir.exists():
+        agent_dir = workspaces_dir / default_agent
+        if not agent_dir.exists():
             return False
         
         # Check if config file exists
-        config_file = default_dir / "agent_config.json"
+        config_file = agent_dir / "agent_config.json"
         if not config_file.exists():
             return False
         
         # Load config and check essential settings
-        import json
         with open(config_file, 'r', encoding='utf-8') as f:
             config = json.load(f)
         
@@ -72,7 +92,7 @@ def is_onboarded() -> bool:
 
 def get_default_agent_name() -> str:
     """
-    Get the default agent name ("default" if configured).
+    Get the default agent name from global settings.
     
     Returns:
         Default agent name
@@ -81,6 +101,17 @@ def get_default_agent_name() -> str:
         return "default"
     
     try:
+        from pathlib import Path
+        
+        # Check if .indoclaw/settings.json exists
+        settings_file = Path.home() / ".indoclaw" / "settings.json"
+        if settings_file.exists():
+            import json
+            with open(settings_file, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+            return settings.get("default_agent", "default")
+        
+        # Fallback to checking workspace
         from src.core.workspace.config import list_agents
         agents = list_agents()
         if "default" in agents:
@@ -93,10 +124,137 @@ def get_default_agent_name() -> str:
         return "default"
 
 
+def _create_agent_workspace_files(workspace_dir: Path, agent_name: str = "IndoClaw") -> None:
+    """Create default workspace files for an agent."""
+    # Update IDENTITY.md with agent name
+    identity_content = f"""# IDENTITY.md - Agent Identity
+
+## Agent Name
+{agent_name}
+
+## Role
+Autonomous AI Assistant
+
+## Persona
+- Compassionate
+- Wise
+- Guiding
+
+## Tone
+- Professional
+- Clear
+- Helpful
+"""
+
+    default_files = {
+        "SOUL.md": """# SOUL.md - Agent Soul & Mission
+
+## Purpose
+The core identity and mission of this agent.
+
+## Vision
+Long-term goals and aspirations.
+
+## Values
+Core principles guiding the agent's behavior.
+""",
+        "AGENTS.md": f"""# AGENTS.md - Agent Specifications
+
+## Agent Name
+{agent_name}
+
+## Description
+Autonomous AI agent operating system.
+
+## Capabilities
+- Task execution
+- Memory management
+- Tool usage
+
+## Personality
+- Helpful
+- Efficient
+- Adaptive
+""",
+        "HEARTBEAT.md": """# HEARTBEAT.md - Agent Status
+
+## Status
+Active
+
+## Last Update
+{date}
+
+## Health Metrics
+- CPU: N/A
+- Memory: N/A
+- Uptime: N/A
+""",
+        "IDENTITY.md": identity_content,
+        "USER.md": """# USER.md - User Interaction
+
+## User Profile
+- Name: Admin
+- Role: System Administrator
+
+## Interaction Guidelines
+- Provide clear, actionable guidance
+- Maintain consistency
+- Support user decision-making
+
+## Preferences
+- Direct communication
+- Actionable insights
+- Values-aligned suggestions
+""",
+        "MEMORY.md": """# MEMORY.md - Memory Configuration
+
+## Short-term Memory
+- Current session context
+- Recent interactions
+- Active tasks
+
+## Long-term Memory
+- Historical patterns
+- Learned behaviors
+- Key insights
+
+## Memory Persistence
+- Enable: Yes
+- Storage: Local
+- TTL: Session-based
+""",
+        "TOOLS.md": """# TOOLS.md - Available Tools
+
+## Available Tools
+- File system operations
+- Data analysis
+- Code generation
+- Web browsing
+- Database operations
+
+## Tool Preferences
+- Use most efficient method
+- Prefer local operations when possible
+- Cross-validate critical operations
+
+## Tool Limitations
+- Memory constraints
+- Processing time
+- API rate limits
+"""
+    }
+    
+    import datetime
+    for filename, content in default_files.items():
+        file_path = workspace_dir / filename
+        content = content.replace("{date}", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        file_path.write_text(content, encoding="utf-8")
+
+
 def run_onboard() -> bool:
     """
     Run the onboard process for first-time setup.
-    Creates the "default" agent configuration.
+    Creates the "default" agent configuration and workspace files.
     
     Returns:
         True if successful, False otherwise
@@ -108,10 +266,10 @@ def run_onboard() -> bool:
     print("Welcome to IndoClaw! Let's configure your agent.")
     print()
     
-    # Get agent name - must be "default" for initial setup
-    agent_name = input("Enter agent name (default: default): ").strip()
+    # Get agent name - default to "IndoClaw" if not provided
+    agent_name = input("Enter agent name (default: IndoClaw): ").strip()
     if not agent_name:
-        agent_name = "default"
+        agent_name = "IndoClaw"
     
     print(f"\nConfiguring agent: '{agent_name}'")
     print()
@@ -160,8 +318,24 @@ def run_onboard() -> bool:
     
     # Save config
     try:
+        from pathlib import Path
+        
+        # Ensure .indoclaw folder exists
+        indo_claw_dir = Path.home() / ".indoclaw"
+        indo_claw_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save settings.json with default_agent
+        settings_file = indo_claw_dir / "settings.json"
+        import json
+        settings = {"default_agent": agent_name}
+        with open(settings_file, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, indent=2)
+        
         workspace_config = get_agent_config(agent_name=agent_name)
         workspace_config.save(config)
+        
+        # Create workspace files
+        _create_agent_workspace_files(workspace_config.workspace_dir, agent_name)
         
         print()
         print("=" * 50)
@@ -169,6 +343,9 @@ def run_onboard() -> bool:
         print("=" * 50)
         print(f"Agent '{agent_name}' configured successfully!")
         print(f"Config saved to: {workspace_config.workspace_dir}")
+        print(f"Workspace files created:")
+        for filename in ["SOUL.md", "IDENTITY.md", "AGENTS.md", "HEARTBEAT.md", "USER.md", "MEMORY.md", "TOOLS.md"]:
+            print(f"  - {filename}")
         print(f"LLM Provider: {llm_provider}")
         print(f"LLM Model: {llm_model}")
         print()
@@ -186,7 +363,7 @@ def uninstall(full: bool = False) -> bool:
     Uninstall IndoClaw files.
     
     Args:
-        full: If True, also remove the ~/IndoClaw folder
+        full: If True, also remove the ~/.indoclaw folder
     
     Returns:
         True if successful, False otherwise
@@ -199,11 +376,11 @@ def uninstall(full: bool = False) -> bool:
     print()
     
     if full:
-        indo_claw_dir = Path.home() / "IndoClaw"
-        print(f"Removing entire IndoClaw folder: {indo_claw_dir}")
+        indo_claw_dir = Path.home() / ".indoclaw"
+        print(f"Removing entire .indoclaw folder: {indo_claw_dir}")
         
         if not indo_claw_dir.exists():
-            print("IndoClaw folder not found. Nothing to remove.")
+            print(".indoclaw folder not found. Nothing to remove.")
             return True
         
         try:
@@ -214,13 +391,13 @@ def uninstall(full: bool = False) -> bool:
             print("IndoClaw has been completely uninstalled.")
             return True
         except Exception as e:
-            print(f"Error removing IndoClaw folder: {e}")
+            print(f"Error removing .indoclaw folder: {e}")
             return False
     else:
         # Remove workspace config files but keep the folder
         print("Removing agent configurations...")
         
-        workspaces_dir = Path.home() / "IndoClaw" / "workspaces"
+        workspaces_dir = Path.home() / ".indoclaw" / "workspaces"
         
         if not workspaces_dir.exists():
             print("No agent configurations found.")
@@ -246,102 +423,117 @@ def uninstall(full: bool = False) -> bool:
 
 def main() -> None:
     """Main entry point."""
-    import argparse
-    from pathlib import Path
+    import sys
     
-    # Parse arguments early to detect onboard command before agent initialization
-    parser = argparse.ArgumentParser(
-        description="IndoClaw - Autonomous AI Agent OS",
-        add_help=False
-    )
-    parser.add_argument(
-        "--help", "-h",
-        action="store_true",
-        help="Show help message"
-    )
-    parser.add_argument(
-        "--onboard",
-        action="store_true",
-        help="Run first-time setup wizard"
-    )
-    parser.add_argument(
-        "--setup",
-        nargs="?",
-        const="default",
-        metavar="AGENT_NAME",
-        help="Run setup wizard for agent configuration"
-    )
-    parser.add_argument(
-        "--full",
-        action="store_true",
-        help="Completely remove IndoClaw folder"
-    )
-    parser.add_argument(
-        "--uninstall",
-        action="store_true",
-        help="Uninstall IndoClaw (remove agent configurations)"
+    # Import command compiler
+    from src.core.command_compiler import parse_command_line, print_help
+    
+    # Get command line arguments (excluding script name)
+    args_list = sys.argv[1:] if len(sys.argv) > 1 else []
+    
+    # Parse command line
+    try:
+        parsed = parse_command_line(args_list)
+    except ValueError as e:
+        print(str(e))
+        print()
+        print_help()
+        return
+    
+    # Handle help flag
+    if parsed.get("help"):
+        print_help()
+        return
+    
+    # Extract parsed values
+    command = parsed.get("command")
+    agent_name = parsed.get("agent_name")
+    prompt = parsed.get("prompt")
+    
+    # Fallback to default agent name if not specified
+    if not agent_name:
+        agent_name = get_default_agent_name()
+    options = parsed.get("options", {})
+    verbose = parsed.get("verbose", False)
+    format_opt = parsed.get("format")
+    full_remove = options.get("--full", False)
+    
+    # Handle onboard command
+    if command == "onboard":
+        run_onboard()
+        return
+    
+    # Handle setup command
+    if command == "setup":
+        from src.interfaces.cli import IndoClawCLI
+        cli = IndoClawCLI(verbose=False)
+        cli.setup_agent(agent_name)
+        return
+    
+    # Handle uninstall command
+    if command == "uninstall":
+        uninstall(full=full_remove)
+        return
+    
+    # Check if command is actually an agent name (folder exists in workspaces)
+    # This handles cases like "indoclaw klnd" where klnd is an agent name
+    if not command and not agent_name and parsed.get("prompt"):
+        potential_agent = parsed.get("prompt")
+        workspace_base = Path.home() / ".indoclaw" / "workspaces"
+        agent_dir = workspace_base / potential_agent
+        config_file = agent_dir / "agent_config.json"
+        if agent_dir.exists() and config_file.exists():
+            # Treat the prompt as an agent name
+            agent_name = potential_agent
+            parsed["prompt"] = None  # Clear the prompt since it's the agent name
+    
+    # Check if no agents exist at all - prompt for onboarding
+    workspace_base = Path.home() / ".indoclaw" / "workspaces"
+    agents_exist = workspace_base.exists() and any(
+        item.is_dir() and (item / "agent_config.json").exists()
+        for item in workspace_base.iterdir()
     )
     
-    args, remaining = parser.parse_known_args()
-    
-    # Handle --help
-    if args.help:
-        print("usage: indoclaw [-h] [--onboard] [command] [prompt]")
+    if not agents_exist:
         print()
-        print("IndoClaw - Autonomous AI Agent OS")
+        print("=" * 60)
+        print("  IndoClaw has not been configured yet.")
+        print("=" * 60)
         print()
-        print("positional arguments:")
-        print("  command    Command to run (onboard, research, write, or chat)")
-        print("  prompt     Prompt to process (if not provided, runs in chat mode)")
+        print("No agents configured.")
         print()
-        print("optional arguments:")
-        print("  -h, --help      Show help message")
-        print("  --onboard       Run first-time setup wizard")
-        print("  --setup [name]  Run setup wizard for agent configuration")
-        print("  --full          Completely remove IndoClaw folder")
-        print("  --uninstall     Uninstall IndoClaw (remove agent configurations)")
+        print("Please run 'indoclaw onboard' to create your first agent.")
         print()
-        print("commands:")
+        print("Available commands:")
         print("  onboard     Run first-time setup wizard")
-        print("  setup       Run setup wizard for agent configuration")
         print("  uninstall   Uninstall IndoClaw")
-        print("  research    Run research on a topic")
-        print("  write       Write content on a topic")
-        print("  chat        Run in chat mode")
+        print()
+        user_input = input("Would you like to run the setup wizard now? (yes/no): ").strip().lower()
+        if user_input in ["yes", "y"]:
+            run_onboard()
+            print()
+            print("Agent configured successfully. Please run 'indoclaw' again to start.")
+            sys.exit(0)
+        else:
+            print("\nThank you for using IndoClaw. Exiting...")
+            sys.exit(0)
         return
     
-    # Handle --full with --uninstall
-    if args.uninstall:
-        uninstall(full=args.full)
-        return
-    
-    # Check if remaining args start with "uninstall"
-    if remaining and remaining[0] == "uninstall":
-        uninstall(full=args.full)
-        return
-    
-    # Handle --onboard or "onboard" command (before any agent initialization)
-    if args.onboard:
-        run_onboard()
-        return
-    
-    # Check if remaining args start with "onboard"
-    if remaining and remaining[0] == "onboard":
-        run_onboard()
-        return
-    
-    # Handle --setup or "setup" command
-    if args.setup is not None:
-        from src.interfaces.cli import IndoClawCLI
-        cli = IndoClawCLI(verbose=False)
-        cli.setup_agent(args.setup)
-        return
-    
-    if remaining and len(remaining) > 0 and remaining[0] == "setup":
-        from src.interfaces.cli import IndoClawCLI
-        cli = IndoClawCLI(verbose=False)
-        cli.setup_agent(remaining[1] if len(remaining) > 1 else None)
-        return
+    # Check if agent exists in workspaces (if agent_name is specified)
+    if agent_name:
+        agent_dir = workspace_base / agent_name
+        config_file = agent_dir / "agent_config.json"
+        if not agent_dir.exists() or not config_file.exists():
+            print(f"Error: Agent '{agent_name}' not found.")
+            print(f"Agent workspace: {agent_dir}")
+            print()
+            print("Available agents:")
+            for item in workspace_base.iterdir():
+                if item.is_dir() and (item / "agent_config.json").exists():
+                    print(f"  - {item.name}")
+            print()
+            print("Please run 'indoclaw agent onboard' to configure an agent.")
+            return
     
     # Check if onboarded (only after we've handled all setup-related commands)
     if not is_onboarded():
@@ -369,12 +561,17 @@ def main() -> None:
             sys.exit(0)
         return
     
-    # Run the CLI with remaining arguments
-    from src.interfaces.cli import main as cli_main
-    if remaining:
-        # Reconstruct sys.argv for CLI
-        sys.argv = ["indoclaw"] + remaining
-    cli_main()
+    # Run the CLI with parsed values
+    from src.interfaces.cli import IndoClawCLI
+    
+    # Create CLI with agent name
+    cli = IndoClawCLI(verbose=verbose, agent_name=agent_name)
+    
+    # Run with prompt if provided, otherwise chat mode
+    if prompt:
+        cli.run_single(prompt)
+    else:
+        cli.run(chat=True)
 
 
 if __name__ == "__main__":

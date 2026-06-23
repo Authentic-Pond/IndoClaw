@@ -50,13 +50,13 @@ class AgentConfig:
         
         Args:
             workspace_dir: Path to the workspaces directory.
-                          Defaults to ~/IndoClaw/workspaces/
+                          Defaults to ~/.indoclaw/workspaces/
             agent_name: Name of the agent (used for workspace folder).
                        If None, uses default agent folder.
         """
         if workspace_dir is None:
             home_dir = Path.home()
-            self.workspace_base_dir = home_dir / "IndoClaw" / "workspaces"
+            self.workspace_base_dir = home_dir / ".indoclaw" / "workspaces"
         else:
             self.workspace_base_dir = Path(workspace_dir)
         
@@ -164,7 +164,7 @@ class AgentConfig:
             Path to the workspaces directory
         """
         home_dir = Path.home()
-        return home_dir / "IndoClaw" / "workspaces"
+        return home_dir / ".indoclaw" / "workspaces"
 
 
 def get_agent_config(workspace_dir: str = None, agent_name: str = None) -> AgentConfig:
@@ -193,7 +193,7 @@ def list_agents(workspace_dir: str = None) -> list:
     """
     if workspace_dir is None:
         home_dir = Path.home()
-        workspace_base = home_dir / "IndoClaw" / "workspaces"
+        workspace_base = home_dir / ".indoclaw" / "workspaces"
     else:
         workspace_base = Path(workspace_dir)
     
@@ -223,7 +223,7 @@ def ensure_agent_workspace(agent_name: str, workspace_dir: str = None) -> Path:
     """
     if workspace_dir is None:
         home_dir = Path.home()
-        workspace_base = home_dir / "IndoClaw" / "workspaces"
+        workspace_base = home_dir / ".indoclaw" / "workspaces"
     else:
         workspace_base = Path(workspace_dir)
     
@@ -236,123 +236,8 @@ def ensure_agent_workspace(agent_name: str, workspace_dir: str = None) -> Path:
     return agent_workspace
 
 
+# Workspace files creation is now handled in src/__main__.py
+# This function is kept for backward compatibility but not used
 def _create_agent_workspace_files(workspace_dir: Path) -> None:
     """Create default workspace files for an agent."""
-    default_files = {
-        "SOUL.md": """# SOUL.md - Agent Soul & Mission
-
-## Purpose
-The core identity and mission of this agent.
-
-## Vision
-Long-term goals and aspirations.
-
-## Values
-Core principles guiding the agent's behavior.
-""",
-        "AGENTS.md": """# AGENTS.md - Agent Specifications
-
-## Agent Name
-Agent
-
-## Description
-Autonomous AI agent operating system.
-
-## Capabilities
-- Task execution
-- Memory management
-- Tool usage
-
-## Personality
-- Helpful
-- Efficient
-- Adaptive
-""",
-        "HEARTBEAT.md": """# HEARTBEAT.md - Agent Status
-
-## Status
-Active
-
-## Last Update
-YYYY-MM-DD HH:MM:SS
-
-## Health Metrics
-- CPU: N/A
-- Memory: N/A
-- Uptime: N/A
-""",
-        "IDENTITY.md": """# IDENTITY.md - Agent Identity
-
-## Agent Name
-Agent
-
-## Role
-Autonomous AI Assistant
-
-## Persona
-- Compassionate
-- Wise
-- Guiding
-
-## Tone
-- Professional
-- Clear
-- Helpful
-""",
-        "USER.md": """# USER.md - User Interaction
-
-## User Profile
-- Name: Admin
-- Role: System Administrator
-
-## Interaction Guidelines
-- Provide clear, actionable guidance
-- Maintain consistency
-- Support user decision-making
-
-## Preferences
-- Direct communication
-- Actionable insights
-- Values-aligned suggestions
-""",
-        "MEMORY.md": """# MEMORY.md - Memory Configuration
-
-## Short-term Memory
-- Current session context
-- Recent interactions
-- Active tasks
-
-## Long-term Memory
-- Historical patterns
-- Learned behaviors
-- Key insights
-
-## Memory Persistence
-- Enable: Yes
-- Storage: Local
-- TTL: Session-based
-""",
-        "TOOLS.md": """# TOOLS.md - Available Tools
-
-## Available Tools
-- File system operations
-- Data analysis
-- Code generation
-- Web browsing
-- Database operations
-
-## Tool Preferences
-- Use most efficient method
-- Prefer local operations when possible
-- Cross-validate critical operations
-
-## Tool Limitations
-- Memory constraints
-- Processing time
-- API rate limits
-"""
-    }
-    
-    for filename, content in default_files.items():
-        file_path = workspace_dir / filename
-        file_path.write_text(content, encoding="utf-8")
+    pass
