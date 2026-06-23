@@ -358,6 +358,41 @@ def run_onboard() -> bool:
         return False
 
 
+def reset_indoclaw() -> bool:
+    """
+    Reset IndoClaw by removing only the .indoclaw folder.
+    This removes all agents and configurations.
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    from pathlib import Path
+    import shutil
+    
+    print("=" * 50)
+    print("IndoClaw Reset")
+    print("=" * 50)
+    print()
+    
+    indo_claw_dir = Path.home() / ".indoclaw"
+    
+    print(f"Removing .indoclaw folder: {indo_claw_dir}")
+    
+    if not indo_claw_dir.exists():
+        print(".indoclaw folder not found. Nothing to reset.")
+        return True
+    
+    try:
+        shutil.rmtree(indo_claw_dir)
+        print(f"Successfully removed {indo_claw_dir}")
+        print()
+        print("IndoClaw has been reset. Run 'indoclaw onboard' to reconfigure.")
+        return True
+    except Exception as e:
+        print(f"Error removing .indoclaw folder: {e}")
+        return False
+
+
 def uninstall(full: bool = False) -> bool:
     """
     Uninstall IndoClaw files.
@@ -468,6 +503,11 @@ def main() -> None:
         from src.interfaces.cli import IndoClawCLI
         cli = IndoClawCLI(verbose=False)
         cli.setup_agent(agent_name)
+        return
+    
+    # Handle reset command
+    if command == "reset":
+        reset_indoclaw()
         return
     
     # Handle uninstall command

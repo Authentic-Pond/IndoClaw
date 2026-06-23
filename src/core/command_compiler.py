@@ -11,7 +11,7 @@ class CommandParser:
     """Parse command line arguments for IndoClaw."""
     
     # Known commands
-    COMMANDS = {"agent", "onboard", "setup", "research", "write", "chat", "uninstall"}
+    COMMANDS = {"agent", "onboard", "setup", "research", "write", "chat", "uninstall", "reset"}
     
     # Options that take values (short and long forms)
     OPTIONS_WITH_VALUE = {"-a", "--agent", "-f", "--format"}
@@ -186,7 +186,9 @@ commands:
   agent [name]    Run with specified agent
   onboard         Run first-time setup wizard
   setup           Run setup wizard for agent configuration
-  uninstall       Uninstall IndoClaw
+  reset           Remove .indoclaw folder (reset all configurations)
+  uninstall       Remove agent configurations (keep .indoclaw folder)
+  uninstall --full Remove .indoclaw folder (complete uninstall)
   research        Run research on a topic
   write           Write content on a topic
   chat            Run in chat mode
