@@ -11,7 +11,7 @@ For more information, see the README.md file.
 """
 
 import warnings
-from src.interfaces.cli import IndoClawCLI, main
+from src.__main__ import main
 
 # Suppress LangChain Pydantic compatibility warnings for Python 3.14+
 warnings.filterwarnings(
@@ -23,4 +23,4 @@ warnings.filterwarnings(
 __version__ = "0.1.0"
 __author__ = "IndoClaw Team"
 
-__all__ = ["IndoClawCLI", "main"]
+__all__ = ["main"]

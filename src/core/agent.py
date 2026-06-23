@@ -26,6 +26,7 @@ from .tools.web_search import WebSearchTool
 from .tools.file_ops import FileOperationTool
 from .tools.calculation import CalculatorTool
 from ..config.settings import settings
+from .workspace import create_workspace_loader
 
 
 @dataclass
@@ -114,8 +115,28 @@ class IndoClawAgent:
         )
         self.long_term_memory = long_term_memory
         
+        # Initialize workspace loader and ensure workspaces exist
+        from .workspace import ensure_workspaces_exists, get_agent_config, ensure_agent_workspace, create_workspace_loader
+        
+        # Ensure agent workspace exists (creates agent-specific folder)
+        ensure_agent_workspace(self.name)
+        
+        # Load agent config from agent-specific workspace
+        self.agent_config = get_agent_config(agent_name=self.name).load()
+        
+        # Create workspace loader with agent-specific workspace
+        self.workspace_loader = create_workspace_loader(agent_name=self.name)
+        self.agent_workspace = self.workspace_loader.load_agent_files(self.name)
+        
+        # Update agent name from config (in case it was overridden)
+        self.name = self.agent_config.get("agent_name", self.name)
+        
         # Set up prompts
         self.system_prompt = system_prompt or self._default_system_prompt()
+        
+        # Inject workspace content into system prompt
+        if self.agent_workspace:
+            self._inject_workspace_into_prompt()
         
         # State tracking
         self.state = AgentState()
@@ -123,6 +144,49 @@ class IndoClawAgent:
         
         if self.verbose:
             print(f"Initialized {self.name} agent")
+    
+    def _inject_workspace_into_prompt(self) -> None:
+        """
+        Inject workspace file contents into the system prompt.
+        Adds agent identity, rules, and behavior guidelines from workspace files.
+        """
+        workspace_content = []
+        
+        # Add SOUL.md - core identity and mission
+        if "SOUL.md" in self.agent_workspace:
+            workspace_content.append("\n# Agent Soul & Mission")
+            workspace_content.append(self.agent_workspace["SOUL.md"])
+        
+        # Add IDENTITY.md - persona and tone
+        if "IDENTITY.md" in self.agent_workspace:
+            workspace_content.append("\n# Agent Identity")
+            workspace_content.append(self.agent_workspace["IDENTITY.md"])
+        
+        # Add USER.md - user interaction guidelines
+        if "USER.md" in self.agent_workspace:
+            workspace_content.append("\n# User Interaction Guidelines")
+            workspace_content.append(self.agent_workspace["USER.md"])
+        
+        # Add MEMORY.md - memory configuration
+        if "MEMORY.md" in self.agent_workspace:
+            workspace_content.append("\n# Memory Configuration")
+            workspace_content.append(self.agent_workspace["MEMORY.md"])
+        
+        # Add TOOLS.md - tool specifications
+        if "TOOLS.md" in self.agent_workspace:
+            workspace_content.append("\n# Available Tools & Capabilities")
+            workspace_content.append(self.agent_workspace["TOOLS.md"])
+        
+        # Add HEARTBEAT.md - status information
+        if "HEARTBEAT.md" in self.agent_workspace:
+            workspace_content.append("\n# System Status")
+            workspace_content.append(self.agent_workspace["HEARTBEAT.md"])
+        
+        # Append workspace content to system prompt
+        if workspace_content:
+            self.system_prompt = self.system_prompt + "\n\n" + "\n".join(workspace_content)
+            if self.verbose:
+                print(f"Loaded {len(self.agent_workspace)} workspace files for {self.name}")
     
     def _default_tools(self) -> List[BaseTool]:
         """Create default tools for the agent."""
