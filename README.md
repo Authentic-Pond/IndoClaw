@@ -114,6 +114,57 @@ indoclaw -v
 indoclaw --chat
 ```
 
+### Agent Management Commands
+
+```bash
+# Configure first agent (onboarding)
+indoclaw onboard
+
+# Run with specific agent
+indoclaw agent <agent_name>
+
+# Reset (remove .indoclaw folder and all configurations)
+indoclaw reset
+
+# Uninstall (remove agent configurations only)
+indoclaw uninstall
+
+# Full uninstall (remove everything including .indoclaw folder)
+indoclaw uninstall --full
+
+# Setup wizard for specific agent
+indoclaw setup <agent_name>
+```
+
+### Examples
+
+```bash
+# Configure IndoClaw
+indoclaw onboard
+
+# Run with default agent
+indoclaw
+
+# Run with "Max" agent
+indoclaw agent Max
+
+# Run with "Max" agent (alternative syntax)
+indoclaw -a Max
+
+# Run with prompt
+indoclaw "What is your name?"
+
+# Reset all configurations
+indoclaw reset
+
+# Uninstall agent configurations
+indoclaw uninstall
+
+# Full uninstall
+indoclaw uninstall --full
+```
+```
+
 ### Programmatic Usage
 
 ```python

@@ -42,7 +42,7 @@ dependencies = [
 ]
 
 [project.scripts]
-indoclaw = "src.interfaces.cli:main"
+indoclaw = "src.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/Authentic-Pond/IndoClaw"
