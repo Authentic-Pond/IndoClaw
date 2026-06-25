@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "indoclaw"
 version = "0.1.0"
-description = "IndoClaw - Autonomous AI Agent OS with CLI"
+description = "IndoClaw - Autonomous AI Agent OS with CLI and Web Interface"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 authors = [
@@ -39,6 +39,10 @@ dependencies = [
     "prompt-toolkit",
     "rich",
     "pyyaml",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "websockets",
 ]
 
 [project.scripts]
