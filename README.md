@@ -41,6 +41,15 @@ IndoClaw is an open-source autonomous AI agent framework designed for:
 
 ---
 
+### Memory Enhancement Features
+
+- **Metadata Filtering** - Filter memories by metadata during semantic search
+- **Relevance Score Normalization** - Automatic scaling of scores to [0, 1] range for consistent ranking
+- **Freshness Tracking** - Track `created_at` and `last_updated` timestamps for memory recency sorting
+- **Flexible Sorting** - Sort query results by relevance (default) or freshness (newest first)
+
+---
+
 ## Architecture
 
 IndoClaw follows a layered architecture:
@@ -237,6 +246,22 @@ print(result.summary)
 writer = WriterAgent(verbose=True)
 result = writer.write("AI trends", format="article")
 print(result.content)
+
+# Memory with metadata filtering and freshness sorting
+from src.core.memory import long_term_memory
+
+# Query with metadata filtering
+results = long_term_memory.query("Python", metadata_filter={"category": "tech"})
+
+# Query with freshness sorting
+results = long_term_memory.query("Python", sort_by_freshness=True)
+
+# Query with both filters
+results = long_term_memory.query(
+    "Python", 
+    metadata_filter={"category": "tech", "topic": "data"},
+    sort_by_freshness=True
+)
 ```
 
 ---
@@ -310,6 +335,27 @@ VERBOSE=true
 - Learned behaviors
 - Key insights (via ChromaDB vector embeddings)
 
+### Memory Query Features
+- **Metadata Filtering** - Filter memories by metadata during semantic search
+- **Relevance Score Normalization** - Automatic scaling of scores to [0, 1] range
+- **Freshness Tracking** - Track creation/update timestamps for recency sorting
+- **Flexible Sorting** - Sort by relevance (default) or freshness (newest first)
+
+```python
+# Query with metadata filtering
+results = memory.query("Python", metadata_filter={"category": "tech"})
+
+# Query with freshness sorting
+results = memory.query("Python", sort_by_freshness=True)
+
+# Query with both filters
+results = memory.query(
+    "Python", 
+    metadata_filter={"category": "tech", "topic": "data"},
+    sort_by_freshness=True
+)
+```
+
 ---
 
 ## Requirements
@@ -325,7 +371,7 @@ VERBOSE=true
 
 ### Running Tests
 
-All tests pass (117/117):
+All tests pass (20/20 for memory, 117+ total):
 
 ```bash
 # Run all tests
@@ -349,8 +395,11 @@ src/
 ├── agents/              # Agent implementations
 ├── core/               # Core framework
 │   ├── adapters/       # LLM provider adapters
-│   ├── memory/         # Memory providers
+│   ├── approval/       # Human-in-the-loop approval system
+│   ├── events/         # Event publishing system
+│   ├── memory/         # Memory providers (short-term, long-term)
 │   ├── messaging/      # Agent communication
+│   ├── plan/           # Plan generation and review
 │   ├── tools/          # Tool implementations
 │   └── workspace/      # Agent workspace management
 ├── interfaces/         # CLI and other interfaces
