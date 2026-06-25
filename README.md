@@ -26,7 +26,7 @@ IndoClaw is an open-source autonomous AI agent framework designed for:
 - **Model Agnostic** - OpenAI, Ollama, vLLM, SGLang via adapter pattern
 - **Multi-Agent Network** - Collaborating agents with structured messaging
 - **Tool Registry** - Pluggable tools with Pydantic validation
-- **Memory Systems** - Short-term (conversation) and long-term (vector embeddings)
+- **Memory Systems** - Short-term (conversation), long-term (vector embeddings), and episodic memory
 - **Observability** - Thought tracing for debugging agent behavior
 - **CLI Interface** - Rich terminal interface with prompt support
 - **Workspace Management** - Multi-agent workspaces with persistent configurations
@@ -38,6 +38,27 @@ IndoClaw is an open-source autonomous AI agent framework designed for:
 - **Plan Review** - Review agent's plan before execution with detailed step-by-step breakdown
 - **Interactive Prompts** - Agent can pause for user input with confirmation, selection, and text input prompts
 - **Event Callbacks** - Trigger webhooks, file logs, or console output on agent events
+
+### Memory Enhancement Features
+
+- **Metadata Filtering** - Filter memories by metadata during semantic search
+- **Relevance Score Normalization** - Automatic scaling of scores to [0, 1] range for consistent ranking
+- **Freshness Tracking** - Track `created_at` and `last_updated` timestamps for memory recency sorting
+- **Flexible Sorting** - Sort query results by relevance (default) or freshness (newest first)
+
+### Episodic Memory
+
+- **Event Storage** - Store distinct events as Episode objects with title, content, and metadata
+- **Semantic Linking** - Link episodes to semantic memories for pattern recognition
+- **Agent Context** - Track episodes per agent and task with environment state
+- **Time-based Queries** - Retrieve episodes by time range or agent
+- **Summary Generation** - Create EpisodeSummary for quick recall of key insights
+
+### Memory Optimization Features
+
+- **Deduplication** - Detect and prevent duplicate memories based on content similarity using hash-based and fuzzy matching
+- **Versioning** - Track multiple versions of memories with history and rollback capabilities
+- **Relevance Scoring** - Normalize similarity scores to [0, 1] range for consistent ranking
 
 ---
 
@@ -237,6 +258,38 @@ print(result.summary)
 writer = WriterAgent(verbose=True)
 result = writer.write("AI trends", format="article")
 print(result.content)
+
+# Memory with metadata filtering and freshness sorting
+from src.core.memory import long_term_memory
+
+# Query with metadata filtering
+results = long_term_memory.query("Python", metadata_filter={"category": "tech"})
+
+# Query with freshness sorting
+results = long_term_memory.query("Python", sort_by_freshness=True)
+
+# Query with both filters
+results = long_term_memory.query(
+    "Python", 
+    metadata_filter={"category": "tech", "topic": "data"},
+    sort_by_freshness=True
+)
+
+# Episodic memory for event storage
+from src.core.memory import episode_memory, Episode
+
+# Add an episode
+episode = Episode(
+    id="episode-1",
+    title="First Agent Task",
+    content="Agent completed initial task successfully",
+    timestamp=1234567890.0,
+    agent_id="agent-1"
+)
+episode_memory.add(episode)
+
+# Query episodes
+episodes = episode_memory.query("agent task", top_k=5)
 ```
 
 ---
@@ -310,6 +363,73 @@ VERBOSE=true
 - Learned behaviors
 - Key insights (via ChromaDB vector embeddings)
 
+### Long-Term Memory Query Features
+- **Metadata Filtering** - Filter memories by metadata during semantic search
+- **Relevance Score Normalization** - Automatic scaling of scores to [0, 1] range
+- **Freshness Tracking** - Track creation/update timestamps for recency sorting
+- **Flexible Sorting** - Sort by relevance (default) or freshness (newest first)
+
+```python
+from src.core.memory import long_term_memory
+
+# Query with metadata filtering
+results = long_term_memory.query("Python", metadata_filter={"category": "tech"})
+
+# Query with freshness sorting
+results = long_term_memory.query("Python", sort_by_freshness=True)
+
+# Query with both filters
+results = long_term_memory.query(
+    "Python", 
+    metadata_filter={"category": "tech", "topic": "data"},
+    sort_by_freshness=True
+)
+```
+
+### Episodic Memory
+- Stores distinct events and experiences
+- Links to semantic memories for pattern recognition
+- Tracks agent context and environment state
+- Time-based retrieval capabilities
+
+```python
+from src.core.memory import episode_memory, Episode
+
+# Add an episode
+episode = Episode(
+    id="episode-1",
+    title="Agent Task Completed",
+    content="Agent successfully completed task X",
+    timestamp=time.time(),
+    agent_id="agent-1"
+)
+episode_memory.add(episode)
+
+# Query episodes
+episodes = episode_memory.query("agent task", top_k=5)
+
+# Get episodes by agent
+agent_episodes = episode_memory.get_by_agent("agent-1")
+
+# Link to semantic memory
+episode_memory.link_to_semantic("episode-1", "semantic-id-1")
+```
+
+### Memory Optimization
+
+```python
+from src.core.memory import MemoryDeduplicator, MemoryVersioning
+
+# Deduplicate memories
+dedup = MemoryDeduplicator(similarity_threshold=0.9)
+is_duplicate = dedup.is_duplicate("Content to check")
+
+# Versioning for memory tracking
+versioning = MemoryVersioning()
+versioning.create_version("memory-id", "Content")
+versioning.rollback_to_version("memory-id", version_number=1)
+```
+
 ---
 
 ## Requirements
@@ -325,7 +445,7 @@ VERBOSE=true
 
 ### Running Tests
 
-All tests pass (117/117):
+All tests pass (182 total):
 
 ```bash
 # Run all tests
@@ -340,6 +460,9 @@ pytest tests/test_approval.py
 pytest tests/test_plan.py
 pytest tests/test_interactive.py
 pytest tests/test_events.py
+pytest tests/test_episode.py
+pytest tests/test_deduplication.py
+pytest tests/test_versioning.py
 ```
 
 ### Project Structure
@@ -349,8 +472,17 @@ src/
 ├── agents/              # Agent implementations
 ├── core/               # Core framework
 │   ├── adapters/       # LLM provider adapters
+│   ├── approval/       # Human-in-the-loop approval system
+│   ├── events/         # Event publishing system
 │   ├── memory/         # Memory providers
+│   │   ├── provider.py         # BaseMemoryProvider interface
+│   │   ├── long_term.py        # Long-term memory (ChromaDB)
+│   │   ├── episode.py          # Episode dataclass
+│   │   ├── episode_provider.py # EpisodeMemory provider
+│   │   ├── deduplication.py    # Memory deduplication utilities
+│   │   └── versioning.py       # Memory versioning utilities
 │   ├── messaging/      # Agent communication
+│   ├── plan/           # Plan generation and review
 │   ├── tools/          # Tool implementations
 │   └── workspace/      # Agent workspace management
 ├── interfaces/         # CLI and other interfaces

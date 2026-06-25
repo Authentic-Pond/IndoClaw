@@ -151,6 +151,135 @@ class TestLongTermMemory:
         results = memory.get_by_metadata({"category": "tech"})
         assert len(results) == 2
 
+    def test_query_with_metadata_filter(self):
+        """Test querying memories with metadata filtering."""
+        memory = LongTermMemory(db_path=self.db_path)
+
+        memory.add("Python programming for data science", {"category": "tech", "topic": "data"})
+        memory.add("Python programming for web development", {"category": "tech", "topic": "web"})
+        memory.add("Java programming for backend", {"category": "tech", "topic": "backend"})
+        memory.add("Biology basics", {"category": "science"})
+
+        # Query with metadata filter for tech category
+        results = memory.query("Python", top_k=5, metadata_filter={"category": "tech"})
+        assert len(results) >= 1
+        # All results should have category == "tech"
+        for entry in results:
+            assert entry.metadata.get("category") == "tech"
+
+    def test_query_with_multiple_metadata_filters(self):
+        """Test querying memories with multiple metadata filters."""
+        memory = LongTermMemory(db_path=self.db_path)
+
+        memory.add("Python programming for data science", {"category": "tech", "topic": "data"})
+        memory.add("Python programming for web development", {"category": "tech", "topic": "web"})
+        memory.add("Java programming for data science", {"category": "tech", "topic": "data"})
+        memory.add("Biology basics", {"category": "science"})
+
+        # Query with multiple metadata filters
+        results = memory.query(
+            "Python",
+            top_k=5,
+            metadata_filter={"category": "tech", "topic": "data"}
+        )
+        assert len(results) >= 1
+        # All results should match both filters
+        for entry in results:
+            assert entry.metadata.get("category") == "tech"
+            assert entry.metadata.get("topic") == "data"
+
+    def test_query_without_metadata_filter(self):
+        """Test that query still works without metadata filter (backward compatibility)."""
+        memory = LongTermMemory(db_path=self.db_path)
+
+        memory.add("Python programming for data science", {"category": "tech"})
+        memory.add("Biology basics", {"category": "science"})
+
+        # Query without metadata filter should return all relevant results
+        results = memory.query("Python", top_k=5)
+        assert len(results) >= 1
+
+    def test_relevance_score_normalization(self):
+        """Test that relevance scores are normalized to [0, 1] range."""
+        memory = LongTermMemory(db_path=self.db_path)
+
+        memory.add("Low relevance content")
+        memory.add("Medium relevance content")
+        memory.add("High relevance content")
+
+        results = memory.query("High relevance", top_k=3)
+
+        # All scores should be in [0, 1] range
+        for entry in results:
+            assert 0.0 <= entry.relevance_score <= 1.0
+
+    def test_freshness_metadata_on_add(self):
+        """Test that freshness metadata is tracked on add."""
+        import time
+        memory = LongTermMemory(db_path=self.db_path)
+
+        before_time = time.time()
+        memory_id = memory.add("Test content")
+        after_time = time.time()
+
+        entry = memory.get(memory_id)
+
+        assert entry is not None
+        assert entry.created_at is not None
+        assert entry.last_updated is not None
+        assert before_time <= entry.created_at <= after_time
+
+    def test_sort_by_freshness(self):
+        """Test that results can be sorted by freshness."""
+        import time
+        memory = LongTermMemory(db_path=self.db_path)
+
+        memory.add("First content")
+        time.sleep(0.1)
+        memory.add("Second content")
+        time.sleep(0.1)
+        memory.add("Third content")
+
+        # Query with freshness sorting (newest first)
+        results = memory.query("content", top_k=5, sort_by_freshness=True)
+
+        # Third content should be first (newest)
+        assert len(results) >= 3
+        # created_at should be in descending order
+        for i in range(len(results) - 1):
+            if results[i].created_at and results[i + 1].created_at:
+                assert results[i].created_at >= results[i + 1].created_at
+
+    def test_sort_by_relevance(self):
+        """Test that results are sorted by relevance by default."""
+        memory = LongTermMemory(db_path=self.db_path)
+
+        memory.add("Python programming language")
+        memory.add("Java programming language")
+        memory.add("Python programming for data science")
+        memory.add("Machine learning concepts")
+
+        # Query for Python
+        results = memory.query("Python", top_k=5, sort_by_relevance=True)
+
+        # Results should have valid relevance scores
+        for entry in results:
+            assert 0.0 <= entry.relevance_score <= 1.0
+
+    def test_memory_entry_freshness_fields(self):
+        """Test MemoryEntry freshness metadata fields."""
+        import time
+        current_time = time.time()
+        entry = MemoryEntry(
+            id="test-id",
+            content="Test content",
+            created_at=current_time,
+            last_updated=current_time
+        )
+
+        assert entry.created_at == current_time
+        assert entry.last_updated == current_time
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

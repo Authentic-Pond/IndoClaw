@@ -66,12 +66,19 @@ class LongTermMemory(BaseMemoryProvider):
 
     def add(self, content: str, metadata: Dict[str, Any] = None, embedding: List[float] = None) -> str:
         """Add a memory entry."""
+        import time
+        current_time = time.time()
+
         if self.client:
             import uuid
             memory_id = str(uuid.uuid4())
+            # Add freshness metadata
+            meta_with_timestamps = (metadata or {}).copy()
+            meta_with_timestamps["created_at"] = current_time
+            meta_with_timestamps["last_updated"] = current_time
             self.collection.add(
                 documents=[content],
-                metadatas=[metadata or {}],
+                metadatas=[meta_with_timestamps],
                 embeddings=[embedding] if embedding else None,
                 ids=[memory_id]
             )
@@ -83,8 +90,10 @@ class LongTermMemory(BaseMemoryProvider):
             entry = {
                 "id": memory_id,
                 "content": content,
-                "metadata": metadata or {},
-                "timestamp": time.time()
+                "metadata": (metadata or {}).copy(),
+                "timestamp": current_time,
+                "created_at": current_time,
+                "last_updated": current_time
             }
             self.fallback_data["memories"].append(entry)
             if self.fallback_file:
@@ -92,7 +101,8 @@ class LongTermMemory(BaseMemoryProvider):
                     json.dump(self.fallback_data, f, indent=2)
             return memory_id
 
-    def query(self, query_text: str, top_k: int = None) -> List[MemoryEntry]:
+    def query(self, query_text: str, top_k: int = None, metadata_filter: Dict[str, Any] = None,
+              sort_by_relevance: bool = True, sort_by_freshness: bool = False) -> List[MemoryEntry]:
         """Query memories by semantic similarity."""
         if top_k is None:
             top_k = self.top_k
@@ -100,26 +110,88 @@ class LongTermMemory(BaseMemoryProvider):
         if self.client:
             results = self.collection.query(
                 query_texts=[query_text],
-                n_results=top_k
+                n_results=top_k,
+                where=metadata_filter
             )
 
             entries = []
             for i, doc in enumerate(results['documents'][0]):
+                metadata = results['metadatas'][0][i] if results.get('metadatas') else {}
                 entry = MemoryEntry(
                     id=results['ids'][0][i],
                     content=doc,
-                    metadata=results['metadatas'][0][i] if results.get('metadatas') else {},
-                    relevance_score=results['distances'][0][i] if results.get('distances') else 0.0
+                    metadata=metadata,
+                    relevance_score=results['distances'][0][i] if results.get('distances') else 0.0,
+                    created_at=metadata.get("created_at"),
+                    last_updated=metadata.get("last_updated")
                 )
                 entries.append(entry)
+
+            # Normalize relevance scores
+            self._normalize_scores(entries)
+
+            # Sort results
+            if sort_by_freshness:
+                entries.sort(key=lambda e: (e.created_at or 0), reverse=True)
+            elif sort_by_relevance:
+                entries.sort(key=lambda e: e.relevance_score, reverse=True)
+
             return entries
         else:
-            # Fallback: simple keyword matching
-            return self._fallback_query(query_text, top_k)
+            # Fallback: simple keyword matching with metadata filtering
+            entries = self._fallback_query(query_text, top_k, metadata_filter)
 
-    def _fallback_query(self, query: str, top_k: int) -> List[MemoryEntry]:
-        """Fallback keyword-based search."""
+            # Set freshness metadata from fallback data
+            for entry in entries:
+                entry.created_at = entry.metadata.get("created_at")
+                entry.last_updated = entry.metadata.get("last_updated")
+
+            # Sort results
+            if sort_by_freshness:
+                entries.sort(key=lambda e: (e.created_at or 0), reverse=True)
+            elif sort_by_relevance:
+                entries.sort(key=lambda e: e.relevance_score, reverse=True)
+
+            return entries
+
+    def _normalize_scores(self, entries: List[MemoryEntry]) -> None:
+        """
+        Normalize relevance scores to [0, 1] range (in-place).
+
+        Args:
+            entries: List of MemoryEntry objects with relevance scores
+        """
+        if not entries:
+            return
+
+        scores = [e.relevance_score for e in entries]
+        min_score, max_score = min(scores), max(scores)
+
+        if max_score - min_score == 0:
+            # All scores are the same
+            for entry in entries:
+                entry.relevance_score = 1.0
+        else:
+            for entry in entries:
+                entry.relevance_score = (entry.relevance_score - min_score) / (max_score - min_score)
+
+    def _fallback_query(self, query: str, top_k: int, metadata_filter: Dict[str, Any] = None) -> List[MemoryEntry]:
+        """Fallback keyword-based search with optional metadata filtering."""
         memories = self.fallback_data.get("memories", [])
+
+        # Apply metadata filter first
+        if metadata_filter:
+            filtered = []
+            for mem in memories:
+                match = True
+                for key, value in metadata_filter.items():
+                    if mem.get('metadata', {}).get(key) != value:
+                        match = False
+                        break
+                if match:
+                    filtered.append(mem)
+            memories = filtered
+
         query_words = set(query.lower().split())
 
         scored = []
@@ -137,7 +209,9 @@ class LongTermMemory(BaseMemoryProvider):
                 id=mem['id'],
                 content=mem['content'],
                 metadata=mem.get('metadata', {}),
-                relevance_score=score
+                relevance_score=score,
+                created_at=mem.get('created_at'),
+                last_updated=mem.get('last_updated')
             )
             entries.append(entry)
 
@@ -165,10 +239,13 @@ class LongTermMemory(BaseMemoryProvider):
         if self.client:
             result = self.collection.get(ids=[memory_id])
             if result and result['ids'] and len(result['ids']) > 0:
+                metadata = result['metadatas'][0] if result.get('metadatas') else {}
                 return MemoryEntry(
                     id=result['ids'][0],
                     content=result['documents'][0] if result.get('documents') else "",
-                    metadata=result['metadatas'][0] if result.get('metadatas') else {},
+                    metadata=metadata,
+                    created_at=metadata.get("created_at"),
+                    last_updated=metadata.get("last_updated")
                 )
             return None
         else:
@@ -178,7 +255,9 @@ class LongTermMemory(BaseMemoryProvider):
                         id=mem['id'],
                         content=mem['content'],
                         metadata=mem.get('metadata', {}),
-                        relevance_score=0.0
+                        relevance_score=0.0,
+                        created_at=mem.get('created_at'),
+                        last_updated=mem.get('last_updated')
                     )
             return None
 
@@ -206,10 +285,13 @@ class LongTermMemory(BaseMemoryProvider):
             result = self.collection.get(where=metadata_filter)
             entries = []
             for i, doc in enumerate(result['documents'] if result.get('documents') else []):
+                metadata = result['metadatas'][i] if result.get('metadatas') else {}
                 entries.append(MemoryEntry(
                     id=result['ids'][i] if result.get('ids') else "",
                     content=doc,
-                    metadata=result['metadatas'][i] if result.get('metadatas') else {},
+                    metadata=metadata,
+                    created_at=metadata.get("created_at"),
+                    last_updated=metadata.get("last_updated")
                 ))
             return entries
         else:
@@ -227,7 +309,9 @@ class LongTermMemory(BaseMemoryProvider):
                         id=mem['id'],
                         content=mem['content'],
                         metadata=mem.get('metadata', {}),
-                        relevance_score=0.0
+                        relevance_score=0.0,
+                        created_at=mem.get('created_at'),
+                        last_updated=mem.get('last_updated')
                     ))
             return entries
 

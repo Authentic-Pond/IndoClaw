@@ -16,6 +16,8 @@ class MemoryEntry:
     embedding: Optional[List[float]] = None
     metadata: Dict[str, Any] = None
     relevance_score: float = 0.0
+    created_at: Optional[float] = None  # Unix timestamp
+    last_updated: Optional[float] = None  # Unix timestamp
 
     def __post_init__(self):
         if self.metadata is None:
@@ -44,16 +46,20 @@ class BaseMemoryProvider(ABC):
         pass
 
     @abstractmethod
-    def query(self, query_text: str, top_k: int = 5) -> List[MemoryEntry]:
+    def query(self, query_text: str, top_k: int = 5, metadata_filter: Dict[str, Any] = None,
+              sort_by_relevance: bool = True, sort_by_freshness: bool = False) -> List[MemoryEntry]:
         """
         Query memories by semantic similarity.
 
         Args:
             query_text: The query text
             top_k: Number of results to return
+            metadata_filter: Optional dictionary of metadata key-value pairs to filter by
+            sort_by_relevance: Sort results by relevance score (descending)
+            sort_by_freshness: Sort results by creation time (newest first)
 
         Returns:
-            List of matching MemoryEntry objects, sorted by relevance
+            List of matching MemoryEntry objects, sorted by relevance or freshness
         """
         pass
 
@@ -105,3 +111,29 @@ class BaseMemoryProvider(ABC):
             List of matching MemoryEntry objects
         """
         pass
+
+    def normalize_relevance_scores(self, entries: List[MemoryEntry]) -> List[MemoryEntry]:
+        """
+        Normalize relevance scores to [0, 1] range.
+
+        Args:
+            entries: List of MemoryEntry objects with relevance scores
+
+        Returns:
+            List of MemoryEntry objects with normalized scores
+        """
+        if not entries:
+            return entries
+
+        scores = [e.relevance_score for e in entries]
+        min_score, max_score = min(scores), max(scores)
+
+        if max_score - min_score == 0:
+            # All scores are the same
+            for entry in entries:
+                entry.relevance_score = 1.0
+        else:
+            for entry in entries:
+                entry.relevance_score = (entry.relevance_score - min_score) / (max_score - min_score)
+
+        return entries
