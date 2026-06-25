@@ -32,6 +32,13 @@ IndoClaw is an open-source autonomous AI agent framework designed for:
 - **Workspace Management** - Multi-agent workspaces with persistent configurations
 - **Agent Onboarding** - First-time setup wizard for easy configuration
 
+### Human-in-the-Loop Features
+
+- **Tool Approval** - Require approval for critical tool execution with configurable confidence thresholds
+- **Plan Review** - Review agent's plan before execution with detailed step-by-step breakdown
+- **Interactive Prompts** - Agent can pause for user input with confirmation, selection, and text input prompts
+- **Event Callbacks** - Trigger webhooks, file logs, or console output on agent events
+
 ---
 
 ## Architecture
@@ -318,7 +325,7 @@ VERBOSE=true
 
 ### Running Tests
 
-All tests pass (62/62):
+All tests pass (117/117):
 
 ```bash
 # Run all tests
@@ -329,6 +336,10 @@ pytest tests/test_tools.py
 pytest tests/test_messaging.py
 pytest tests/test_memory.py
 pytest tests/test_observation.py
+pytest tests/test_approval.py
+pytest tests/test_plan.py
+pytest tests/test_interactive.py
+pytest tests/test_events.py
 ```
 
 ### Project Structure
@@ -345,19 +356,6 @@ src/
 ├── interfaces/         # CLI and other interfaces
 └── models/             # Data models
 ```
-
----
-
-## 🚧 Development Status
-
-**MVP Complete** - All core features implemented:
-
-1. ✅ Model Agnosticism (adapters for OpenAI/Ollama/vLLM)
-2. ✅ Tool Registry (pluggable tools with auto-registration)
-3. ✅ Agent Communication (AgentMessage, AgentRegistry, DelegationTool)
-4. ✅ Persistence & Observability (BaseMemoryProvider, ThoughtTracer)
-
-**Tests: 62 passing**
 
 ---
 

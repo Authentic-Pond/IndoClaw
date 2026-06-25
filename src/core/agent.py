@@ -22,6 +22,20 @@ except ImportError:
 from .memory.short_term import ShortTermMemory
 from .memory.long_term import LongTermMemory, long_term_memory
 from .tools.base import BaseTool, ToolResult
+
+# Import event system (optional, for Phase 5)
+try:
+    from .events.publisher import EventPublisher, EventType
+    EVENTS_AVAILABLE = True
+except ImportError:
+    EVENTS_AVAILABLE = False
+
+# Import approval system (optional, for Phase 5)
+try:
+    from .approval.base import ApprovalProvider
+    APPROVAL_AVAILABLE = True
+except ImportError:
+    APPROVAL_AVAILABLE = False
 from .tools.web_search import WebSearchTool
 from .tools.file_ops import FileOperationTool
 from .tools.calculation import CalculatorTool
@@ -141,7 +155,21 @@ class IndoClawAgent:
         # State tracking
         self.state = AgentState()
         self.history: List[AgentState] = []
-        
+
+        # Phase 5: Initialize event publisher and approval provider
+        self._event_publisher = None
+        self._approval_provider = None
+
+        if EVENTS_AVAILABLE:
+            self._event_publisher = EventPublisher()
+
+        if APPROVAL_AVAILABLE:
+            from ..approval.auto_approval import AutoApprovalProvider
+            self._approval_provider = AutoApprovalProvider()
+            # Configure tools with approval provider
+            for tool in self.tools:
+                tool.set_approval_provider(self._approval_provider)
+
         if self.verbose:
             print(f"Initialized {self.name} agent")
     
@@ -360,10 +388,37 @@ When task is complete, respond with FINAL_ANSWER: Your final response"""
         
         # Show tool calling output before execution
         self._show_tool_calling(state.action, state.action_input)
-        
+
+        # Phase 5: Publish event before tool execution
+        if self._event_publisher:
+            self._event_publisher.publish(
+                event_type=EventType.TOOL_EXECUTED,
+                agent_id=self.name,
+                payload={
+                    "tool": state.action,
+                    "input": state.action_input
+                }
+            )
+
         try:
             result = tool.execute(state.action_input)
-            
+
+            # Phase 5: Publish event after tool execution
+            if self._event_publisher:
+                event_type = EventType.TOOL_EXECUTED
+                if not result.success:
+                    event_type = EventType.ERROR
+                self._event_publisher.publish(
+                    event_type=event_type,
+                    agent_id=self.name,
+                    payload={
+                        "tool": state.action,
+                        "input": state.action_input,
+                        "success": result.success,
+                        "output": result.content if result.success else result.error
+                    }
+                )
+
             # Show tool calling output after execution (with result)
             self._show_tool_calling(state.action, state.action_input, result)
             
@@ -411,6 +466,16 @@ When task is complete, respond with FINAL_ANSWER: Your final response"""
     def run(self, input_text: str) -> AgentOutput:
         """Run the agent with given input."""
         self._log(f"Starting execution for: {input_text}")
+
+        # Phase 5: Publish task start event
+        if self._event_publisher:
+            self._event_publisher.publish(
+                event_type=EventType.TASK_START,
+                agent_id=self.name,
+                payload={
+                    "task": input_text
+                }
+            )
         
         steps = []
         state = self.state
@@ -450,21 +515,50 @@ When task is complete, respond with FINAL_ANSWER: Your final response"""
             
             # If no action needed, we're done
             if not state.action:
+                # Phase 5: Publish task end event
+                if self._event_publisher:
+                    self._event_publisher.publish(
+                        event_type=EventType.TASK_END,
+                        agent_id=self.name,
+                        payload={
+                            "status": "completed_no_action",
+                            "response": state.thought
+                        }
+                    )
                 return AgentOutput(
                     response=state.thought,
                     state=state,
                     steps=steps
                 )
-            
+
             # If result has response, we might be done
             if result.success and isinstance(result.content, dict) and "response" in result.content:
+                # Phase 5: Publish task end event
+                if self._event_publisher:
+                    self._event_publisher.publish(
+                        event_type=EventType.TASK_END,
+                        agent_id=self.name,
+                        payload={
+                            "status": "completed_with_response",
+                            "response": result.content["response"]
+                        }
+                    )
                 return AgentOutput(
                     response=result.content["response"],
                     state=state,
                     steps=steps
                 )
-        
+
         # Max iterations reached
+        # Phase 5: Publish task end event with error
+        if self._event_publisher:
+            self._event_publisher.publish(
+                event_type=EventType.TASK_END,
+                agent_id=self.name,
+                payload={
+                    "status": "max_iterations_reached"
+                }
+            )
         return AgentOutput(
             response="I was unable to complete the task within the maximum number of iterations.",
             state=state,

@@ -7,6 +7,14 @@ from typing import Any, Dict, Optional, Type
 from dataclasses import dataclass
 from pydantic import BaseModel, ValidationError
 
+
+# Import approval system (optional, for Phase 5)
+try:
+    from ..approval.base import ApprovalProvider, ApprovalRequest, ApprovalResult
+    APPROVAL_AVAILABLE = True
+except ImportError:
+    APPROVAL_AVAILABLE = False
+
 @dataclass
 class ToolResult:
     """Result of a tool execution."""
@@ -21,14 +29,21 @@ class ToolResult:
 
 
 class BaseTool(ABC):
-    """Base class for all tools with P/dantic-based input validation."""
+    """Base class for all tools with Pydantic-based input validation."""
 
     name: str = "BaseTool"
     description: str = "Base tool class"
     input_schema: Optional[Type[BaseModel]] = None
+    approval_required: bool = False
+    confidence_threshold: float = 0.8
 
     def __init__(self):
         self.enabled = True
+        self.approval_provider: Optional[ApprovalProvider] = None
+
+    def set_approval_provider(self, provider: ApprovalProvider) -> None:
+        """Set the approval provider for this tool."""
+        self.approval_provider = provider
 
     def enable(self) -> None:
         """Enable the tool."""
@@ -54,7 +69,7 @@ class BaseTool(ABC):
     def execute(self, **kwargs) -> ToolResult:
         """
         The entry point for executing a tool.
-        Handles parameter validation using the input_schema if provided.
+        Handles parameter validation, approval workflow, and execution.
         """
         if not self.is_enabled():
             return ToolResult(success=False, error=f"Tool '{self.name}' is disabled.")
@@ -67,6 +82,23 @@ class BaseTool(ABC):
                 return ToolResult(success=False, error=f"Validation Error: {str(e)}")
             except Exception as e:
                 return ToolResult(success=False, error=f"Unexpected error during validation: {str(e)}")
+
+        # Check approval if required
+        if self.approval_required and APPROVAL_AVAILABLE and self.approval_provider:
+            confidence = kwargs.get("confidence", self.confidence_threshold)
+            approval_request = ApprovalRequest(
+                tool_name=self.name,
+                action="execute",
+                input_data=kwargs,
+                reason=f"Tool {self.name} requires approval",
+                confidence=confidence
+            )
+            result = self.approval_provider.request_approval(approval_request)
+            if not result.approved:
+                return ToolResult(
+                    success=False,
+                    error=f"Tool execution rejected: {result.rejection_reason}"
+                )
 
         try:
             return self._run(**kwargs)
