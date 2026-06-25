@@ -54,6 +54,12 @@ IndoClaw is an open-source autonomous AI agent framework designed for:
 - **Time-based Queries** - Retrieve episodes by time range or agent
 - **Summary Generation** - Create EpisodeSummary for quick recall of key insights
 
+### Memory Optimization Features
+
+- **Deduplication** - Detect and prevent duplicate memories based on content similarity using hash-based and fuzzy matching
+- **Versioning** - Track multiple versions of memories with history and rollback capabilities
+- **Relevance Scoring** - Normalize similarity scores to [0, 1] range for consistent ranking
+
 ---
 
 ## Architecture
@@ -409,6 +415,21 @@ agent_episodes = episode_memory.get_by_agent("agent-1")
 episode_memory.link_to_semantic("episode-1", "semantic-id-1")
 ```
 
+### Memory Optimization
+
+```python
+from src.core.memory import MemoryDeduplicator, MemoryVersioning
+
+# Deduplicate memories
+dedup = MemoryDeduplicator(similarity_threshold=0.9)
+is_duplicate = dedup.is_duplicate("Content to check")
+
+# Versioning for memory tracking
+versioning = MemoryVersioning()
+versioning.create_version("memory-id", "Content")
+versioning.rollback_to_version("memory-id", version_number=1)
+```
+
 ---
 
 ## Requirements
@@ -424,7 +445,7 @@ episode_memory.link_to_semantic("episode-1", "semantic-id-1")
 
 ### Running Tests
 
-All tests pass (143 total):
+All tests pass (182 total):
 
 ```bash
 # Run all tests
@@ -440,6 +461,8 @@ pytest tests/test_plan.py
 pytest tests/test_interactive.py
 pytest tests/test_events.py
 pytest tests/test_episode.py
+pytest tests/test_deduplication.py
+pytest tests/test_versioning.py
 ```
 
 ### Project Structure
@@ -452,10 +475,12 @@ src/
 │   ├── approval/       # Human-in-the-loop approval system
 │   ├── events/         # Event publishing system
 │   ├── memory/         # Memory providers
-│   │   ├── provider.py      # BaseMemoryProvider interface
-│   │   ├── long_term.py     # Long-term memory (ChromaDB)
-│   │   ├── episode.py       # Episode dataclass
-│   │   └── episode_provider.py # EpisodeMemory provider
+│   │   ├── provider.py         # BaseMemoryProvider interface
+│   │   ├── long_term.py        # Long-term memory (ChromaDB)
+│   │   ├── episode.py          # Episode dataclass
+│   │   ├── episode_provider.py # EpisodeMemory provider
+│   │   ├── deduplication.py    # Memory deduplication utilities
+│   │   └── versioning.py       # Memory versioning utilities
 │   ├── messaging/      # Agent communication
 │   ├── plan/           # Plan generation and review
 │   ├── tools/          # Tool implementations
