@@ -129,28 +129,33 @@ set PATH="%PATH%;C:\path\to\IndoClaw\venv\Scripts"
 ```bash
 # Interactive chat mode
 indoclaw
+indoclaw chat
 
-# Single prompt
+# Single prompt with default agent
 indoclaw "What is 25 * 17?"
 
-# Research mode
-indoclaw --research "Latest AI developments"
+# With specific agent
+indoclaw agent "agent_name" "Hello how are you?"
 
-# Writing mode
-indoclaw --write "The future of technology" --format article
+# With agent and subcommand
+indoclaw agent Serene research "Quantum computing"
+indoclaw agent Writer write "AI trends" --format markdown
+
+# Direct commands
+indoclaw research "Latest AI developments"
+indoclaw write "The future of technology" --format article
 
 # Verbose mode
 indoclaw -v
 
 # List registered tools
-indoclaw --list-tools
+indoclaw list-tools
 
 # List registered agents
-indoclaw --list-agents
+indoclaw list-agents
 
 # View thought traces
 indoclaw --trace
-indoclaw --traces
 ```
 
 ### Agent Management Commands
@@ -168,29 +173,34 @@ indoclaw reset
 # Uninstall (remove configurations)
 indoclaw uninstall
 indoclaw uninstall --full
+
+# Uninstall full installation (removes ~/.indoclaw)
+indoclaw uninstall --full
 ```
 
 ### Examples
 
 ```bash
-# Basic conversation
+# Basic conversation with default agent
 indoclaw "How can I improve my Python skills?"
 
-# Use calculator tool
-indoclaw "Calculate 123 * 456 + 789"
+# With specific agent
+indoclaw agent "agent_name" "Hello how are you?"
 
 # Research with web search
-indoclaw --research "Latest breakthroughs in quantum computing"
+indoclaw research "Latest breakthroughs in quantum computing"
 
 # Write an article
-indoclaw --write "The impact of AI on healthcare" --format article
+indoclaw write "The impact of AI on healthcare" --format article
 
 # List available tools
-indoclaw --list-tools
-# Output: duckduckgo_search, web_search, file_ops, calculator, llm_call
+indoclaw list-tools
 
 # List registered agents
-indoclaw --list-agents
+indoclaw list-agents
+
+# Verbose mode with prompt
+indoclaw -v "What is 25 * 17?"
 ```
 
 ### Programmatic Usage
@@ -367,7 +377,11 @@ We welcome contributions! Please feel free to submit a Pull Request.
 git clone https://github.com/Authentic-Pond/IndoClaw.git
 cd IndoClaw
 ./install.sh
-source venv/bin/activate
+# Or run: indoclaw --install
+
+# Add to PATH (after installation):
+export PATH="$PATH:$HOME/.indoclaw/venv/bin"
+source ~/.bashrc   # or ~/.zshrc
 ```
 
 ---
