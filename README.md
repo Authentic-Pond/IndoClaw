@@ -48,6 +48,14 @@ IndoClaw is an open-source autonomous AI agent framework designed for:
 - **Freshness Tracking** - Track `created_at` and `last_updated` timestamps for memory recency sorting
 - **Flexible Sorting** - Sort query results by relevance (default) or freshness (newest first)
 
+### Episodic Memory
+
+- **Event Storage** - Store distinct events as Episode objects with title, content, and metadata
+- **Semantic Linking** - Link episodes to semantic memories for pattern recognition
+- **Agent Context** - Track episodes per agent and task with environment state
+- **Time-based Queries** - Retrieve episodes by time range or agent
+- **Summary Generation** - Create EpisodeSummary for quick recall of key insights
+
 ---
 
 ## Architecture
@@ -262,6 +270,22 @@ results = long_term_memory.query(
     metadata_filter={"category": "tech", "topic": "data"},
     sort_by_freshness=True
 )
+
+# Episodic memory for event storage
+from src.core.memory import episode_memory, Episode
+
+# Add an episode
+episode = Episode(
+    id="episode-1",
+    title="First Agent Task",
+    content="Agent completed initial task successfully",
+    timestamp=1234567890.0,
+    agent_id="agent-1"
+)
+episode_memory.add(episode)
+
+# Query episodes
+episodes = episode_memory.query("agent task", top_k=5)
 ```
 
 ---
