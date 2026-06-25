@@ -3,7 +3,7 @@ Plan data structures for IndoClaw Human-in-the-Loop features.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from enum import Enum
 from datetime import datetime
 
