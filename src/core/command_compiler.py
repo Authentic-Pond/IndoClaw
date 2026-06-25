@@ -13,7 +13,7 @@ class CommandParser:
     # Primary commands
     COMMANDS = {
         "agent", "onboard", "setup", "research", "write",
-        "chat", "uninstall", "reset", "list-tools", "list-agents"
+        "chat", "uninstall", "reset", "list-tools", "list-agents", "web"
     }
 
     # Secondary commands (after 'agent')
@@ -233,6 +233,8 @@ Commands:
     List all registered agents (Phase 3)
   uninstall [--full]
     Uninstall IndoClaw (remove configurations or full install)
+  web [start|install|stop] [--port <port>]
+    Start, install, or stop the web interface (Phase 7)
 
 Options:
   -a, --agent <name>   Run with specified agent
@@ -250,6 +252,7 @@ Examples:
   indoclaw research "Latest AI developments"
   indoclaw list-tools
   indoclaw list-agents
+  indoclaw web start --port 3000
 
 Installation:
   indoclaw --install   Auto-install to venv and show PATH instructions
