@@ -26,7 +26,7 @@ IndoClaw is an open-source autonomous AI agent framework designed for:
 - **Model Agnostic** - OpenAI, Ollama, vLLM, SGLang via adapter pattern
 - **Multi-Agent Network** - Collaborating agents with structured messaging
 - **Tool Registry** - Pluggable tools with Pydantic validation
-- **Memory Systems** - Short-term (conversation) and long-term (vector embeddings)
+- **Memory Systems** - Short-term (conversation), long-term (vector embeddings), and episodic memory
 - **Observability** - Thought tracing for debugging agent behavior
 - **CLI Interface** - Rich terminal interface with prompt support
 - **Workspace Management** - Multi-agent workspaces with persistent configurations
@@ -38,8 +38,6 @@ IndoClaw is an open-source autonomous AI agent framework designed for:
 - **Plan Review** - Review agent's plan before execution with detailed step-by-step breakdown
 - **Interactive Prompts** - Agent can pause for user input with confirmation, selection, and text input prompts
 - **Event Callbacks** - Trigger webhooks, file logs, or console output on agent events
-
----
 
 ### Memory Enhancement Features
 
@@ -359,25 +357,56 @@ VERBOSE=true
 - Learned behaviors
 - Key insights (via ChromaDB vector embeddings)
 
-### Memory Query Features
+### Long-Term Memory Query Features
 - **Metadata Filtering** - Filter memories by metadata during semantic search
 - **Relevance Score Normalization** - Automatic scaling of scores to [0, 1] range
 - **Freshness Tracking** - Track creation/update timestamps for recency sorting
 - **Flexible Sorting** - Sort by relevance (default) or freshness (newest first)
 
 ```python
+from src.core.memory import long_term_memory
+
 # Query with metadata filtering
-results = memory.query("Python", metadata_filter={"category": "tech"})
+results = long_term_memory.query("Python", metadata_filter={"category": "tech"})
 
 # Query with freshness sorting
-results = memory.query("Python", sort_by_freshness=True)
+results = long_term_memory.query("Python", sort_by_freshness=True)
 
 # Query with both filters
-results = memory.query(
+results = long_term_memory.query(
     "Python", 
     metadata_filter={"category": "tech", "topic": "data"},
     sort_by_freshness=True
 )
+```
+
+### Episodic Memory
+- Stores distinct events and experiences
+- Links to semantic memories for pattern recognition
+- Tracks agent context and environment state
+- Time-based retrieval capabilities
+
+```python
+from src.core.memory import episode_memory, Episode
+
+# Add an episode
+episode = Episode(
+    id="episode-1",
+    title="Agent Task Completed",
+    content="Agent successfully completed task X",
+    timestamp=time.time(),
+    agent_id="agent-1"
+)
+episode_memory.add(episode)
+
+# Query episodes
+episodes = episode_memory.query("agent task", top_k=5)
+
+# Get episodes by agent
+agent_episodes = episode_memory.get_by_agent("agent-1")
+
+# Link to semantic memory
+episode_memory.link_to_semantic("episode-1", "semantic-id-1")
 ```
 
 ---
@@ -395,7 +424,7 @@ results = memory.query(
 
 ### Running Tests
 
-All tests pass (20/20 for memory, 117+ total):
+All tests pass (143 total):
 
 ```bash
 # Run all tests
@@ -410,6 +439,7 @@ pytest tests/test_approval.py
 pytest tests/test_plan.py
 pytest tests/test_interactive.py
 pytest tests/test_events.py
+pytest tests/test_episode.py
 ```
 
 ### Project Structure
@@ -421,7 +451,11 @@ src/
 │   ├── adapters/       # LLM provider adapters
 │   ├── approval/       # Human-in-the-loop approval system
 │   ├── events/         # Event publishing system
-│   ├── memory/         # Memory providers (short-term, long-term)
+│   ├── memory/         # Memory providers
+│   │   ├── provider.py      # BaseMemoryProvider interface
+│   │   ├── long_term.py     # Long-term memory (ChromaDB)
+│   │   ├── episode.py       # Episode dataclass
+│   │   └── episode_provider.py # EpisodeMemory provider
 │   ├── messaging/      # Agent communication
 │   ├── plan/           # Plan generation and review
 │   ├── tools/          # Tool implementations
