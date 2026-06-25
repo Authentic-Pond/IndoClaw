@@ -36,6 +36,21 @@ try:
     APPROVAL_AVAILABLE = True
 except ImportError:
     APPROVAL_AVAILABLE = False
+
+# Import plan system (optional, for Phase 5)
+try:
+    from .plan.base import Plan, PlanStep, PlanStatus
+    PLAN_AVAILABLE = True
+except ImportError:
+    PLAN_AVAILABLE = False
+
+# Import interactive prompts system (optional, for Phase 5)
+try:
+    from .messaging.interactive import InteractivePrompts, confirm, select
+    INTERACTIVE_AVAILABLE = True
+except ImportError:
+    INTERACTIVE_AVAILABLE = False
+
 from .tools.web_search import WebSearchTool
 from .tools.file_ops import FileOperationTool
 from .tools.calculation import CalculatorTool
@@ -361,7 +376,164 @@ When task is complete, respond with FINAL_ANSWER: Your final response"""
         
         self.state = state
         return state
-    
+
+    def generate_plan(self, task: str) -> Plan:
+        """
+        Generate a plan for the given task without executing.
+
+        Returns a Plan object with steps, tools, and expected outcomes.
+        """
+        self._log("Generating plan...")
+
+        # Get memory context
+        memory_context = self._get_memory_context(task)
+
+        # Build messages for plan generation
+        messages = []
+        messages.append(SystemMessage(content=self.system_prompt))
+
+        # Add memory context
+        for msg in memory_context:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if role == "user":
+                messages.append(HumanMessage(content=content))
+            elif role == "assistant":
+                messages.append(AIMessage(content=content))
+            else:
+                messages.append(SystemMessage(content=f"System: {content}"))
+
+        # Add plan generation prompt
+        tools_list = "\n".join([
+            f"- {tool.name}: {tool.description}"
+            for tool in self.tools
+        ])
+
+        plan_prompt = f"""
+You are planning how to complete a task. Generate a step-by-step plan using available tools.
+
+Available tools:
+{tools_list}
+
+Task: {task}
+
+Please think through this task and create a plan with the following format:
+
+THOUGHT: Your analysis of the task
+PLAN: A numbered list of steps, each with:
+  - Step N: Description of the step
+  - Tool: Which tool to use
+  - Input: What input to provide
+  - Expected: What outcome you expect
+
+Rules:
+- Break complex tasks into small, manageable steps
+- Use tools when you need external information or to perform actions
+- Each step should be simple enough to execute in one tool call
+- Consider what information you need before each step
+
+Respond in this format:
+THOUGHT: Your reasoning
+PLAN:
+1. Step description
+   Tool: tool_name
+   Input: input_data
+   Expected: expected_result
+2. Next step...
+
+If no plan is needed, respond with NO_PLAN: Task can be completed directly."""
+
+        messages.append(HumanMessage(content=plan_prompt))
+
+        # Get LLM response
+        response = self.llm.invoke(messages)
+        content = response.content.strip()
+
+        # Parse the plan from the response
+        plan = self._parse_plan(task, content)
+
+        self._log(f"Generated plan with {len(plan.steps)} steps")
+
+        return plan
+
+    def _parse_plan(self, task: str, response: str) -> Plan:
+        """
+        Parse the LLM response into a Plan object.
+        """
+        # Extract thought if present
+        thought = ""
+        if "THOUGHT:" in response:
+            thought = response.split("THOUGHT:")[1].split("PLAN:")[0].strip() if "PLAN:" in response else response.split("THOUGHT:")[1].strip()
+
+        # Check if no plan is needed
+        if "NO_PLAN:" in response or "no plan" in response.lower():
+            return Plan(
+                task=task,
+                status=PlanStatus.APPROVED,
+                metadata={"thought": thought, "reason": "Direct response sufficient"}
+            )
+
+        # Parse steps from the response
+        steps = []
+        current_step = None
+
+        for line in response.split("\n"):
+            line = line.strip()
+
+            # Check for step number
+            if line.startswith("1.") or line.startswith("1 -"):
+                current_step = {
+                    "description": line.split(".", 1)[1].strip() if "." in line else line.split("-", 1)[1].strip(),
+                    "tool": "",
+                    "input": {},
+                    "expected": ""
+                }
+            elif line.startswith("2.") or line.startswith("2 -"):
+                current_step = {
+                    "description": line.split(".", 1)[1].strip() if "." in line else line.split("-", 1)[1].strip(),
+                    "tool": "",
+                    "input": {},
+                    "expected": ""
+                }
+                steps.append(current_step)
+            elif line.startswith("Tool:") or line.startswith("Tool:"):
+                if current_step:
+                    current_step["tool"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Input:") or line.startswith("Input:"):
+                if current_step:
+                    try:
+                        # Try to parse as JSON
+                        import json
+                        input_str = line.split(":", 1)[1].strip()
+                        if input_str.startswith("{"):
+                            current_step["input"] = json.loads(input_str)
+                        else:
+                            current_step["input"] = {"value": input_str}
+                    except:
+                        current_step["input"] = {"value": line.split(":", 1)[1].strip()}
+            elif line.startswith("Expected:") or line.startswith("Expected:"):
+                if current_step:
+                    current_step["expected"] = line.split(":", 1)[1].strip()
+
+        # Build PlanStep objects
+        plan_steps = []
+        for i, step_data in enumerate(steps or []):
+            plan_steps.append(PlanStep(
+                step_number=i + 1,
+                description=step_data.get("description", ""),
+                tool_name=step_data.get("tool", ""),
+                input_data=step_data.get("input", {}),
+                expected_output=step_data.get("expected"),
+                confidence=0.8  # Default confidence for plan generation
+            ))
+
+        return Plan(
+            task=task,
+            steps=plan_steps,
+            status=PlanStatus.DRAFT,
+            metadata={"thought": thought, "raw_response": response}
+        )
+
     def _act(self, state: AgentState) -> ToolResult:
         """Perform action using selected tool."""
         self._log(f"Acting with: {state.action}")
@@ -564,7 +736,305 @@ When task is complete, respond with FINAL_ANSWER: Your final response"""
             state=state,
             steps=steps
         )
-    
+
+    def _prompt_for_plan_approval(self, plan: Plan) -> bool:
+        """
+        Prompt user to approve or reject a plan.
+
+        Returns True if approved, False if rejected.
+        """
+        if plan.status == PlanStatus.APPROVED:
+            return True
+        if plan.status == PlanStatus.REJECTED:
+            return False
+
+        # Display plan for user review
+        print("\n" + "=" * 60)
+        print("[PLAN APPROVAL REQUEST]")
+        print("=" * 60)
+        print(f"Task: {plan.task}")
+        print(f"Status: {plan.status.value}")
+        print(f"\nSteps ({len(plan.steps)}):")
+
+        for step in plan.steps:
+            print(f"\n  Step {step.step_number}: {step.description}")
+            print(f"    Tool: {step.tool_name}")
+            print(f"    Input: {step.input_data}")
+            if step.expected_output:
+                print(f"    Expected: {step.expected_output}")
+            print(f"    Confidence: {step.confidence}")
+
+        if plan.metadata.get("thought"):
+            print(f"\n[Reasoning]")
+            print(plan.metadata["thought"])
+
+        print("\n" + "-" * 60)
+
+        # Get user approval
+        while True:
+            response = input("Approve this plan? [y/n]: ").strip().lower()
+            if response in ("y", "yes"):
+                print("[PLAN APPROVED]")
+                print("=" * 60 + "\n")
+                return True
+            elif response in ("n", "no"):
+                print("[PLAN REJECTED]")
+                print("=" * 60 + "\n")
+                return False
+            else:
+                print("Please enter 'y' or 'n'.")
+
+    def execute_plan(self, plan: Plan, user_approved: bool = False, auto_approve: bool = False) -> AgentOutput:
+        """
+        Execute a generated plan.
+
+        Args:
+            plan: The Plan object to execute
+            user_approved: If True, skip approval prompt
+            auto_approve: If True, auto-approve without prompt
+
+        Returns:
+            AgentOutput with the final response and execution steps
+        """
+        # Auto-approve if enabled
+        if auto_approve:
+            plan = self.approve_plan(plan, user_id="auto", approve=True)
+
+        # Handle unapproved plans
+        if not user_approved and plan.status == PlanStatus.DRAFT:
+            # Prompt user for approval
+            user_approved = self._prompt_for_plan_approval(plan)
+
+            if not user_approved:
+                return AgentOutput(
+                    response="Plan execution cancelled by user.",
+                    state=self.state,
+                    steps=[]
+                )
+
+        if plan.status == PlanStatus.DRAFT:
+            # Update plan to approved if not already set
+            plan = self.approve_plan(plan, user_id="user", approve=True)
+
+        self._log(f"Executing plan with {len(plan.steps)} steps")
+
+        steps = []
+        state = self.state
+        all_results = []
+
+        # Execute each step in the plan
+        for plan_step in plan.steps:
+            # Update state for this step
+            state = AgentState(
+                input=plan.task,
+                current_task=plan_step.description,
+                plan=[plan_step.to_dict()],
+                thought=f"Executing step {plan_step.step_number}: {plan_step.description}",
+                action=plan_step.tool_name,
+                action_input=str(plan_step.input_data),
+                memory_context=self._get_memory_context(plan.task)
+            )
+
+            # Execute the action
+            result = self._act(state)
+
+            # Update memory
+            self._update_memory(state, result)
+
+            # Record step
+            steps.append({
+                "step": plan_step.step_number,
+                "thought": state.thought,
+                "action": state.action,
+                "input": plan_step.input_data,
+                "result": result.content if result.success else result.error,
+                "timestamp": state.timestamp
+            })
+
+            all_results.append(result)
+
+            # Check for failure
+            if not result.success:
+                # Phase 5: Publish task end event with error
+                if self._event_publisher:
+                    self._event_publisher.publish(
+                        event_type=EventType.TASK_END,
+                        agent_id=self.name,
+                        payload={
+                            "status": "plan_execution_failed",
+                            "failed_step": plan_step.step_number,
+                            "error": result.error
+                        }
+                    )
+                return AgentOutput(
+                    response=f"I failed at step {plan_step.step_number}: {result.error}",
+                    state=state,
+                    steps=steps
+                )
+
+        # Plan completed successfully
+        final_response = f"Plan completed successfully.\n\nResults:\n" + "\n".join([
+            f"Step {i+1}: {r.content if r.success else r.error}"
+            for i, r in enumerate(all_results)
+        ])
+
+        # Phase 5: Publish task end event
+        if self._event_publisher:
+            self._event_publisher.publish(
+                event_type=EventType.TASK_END,
+                agent_id=self.name,
+                payload={
+                    "status": "completed_with_plan",
+                    "steps_executed": len(plan.steps)
+                }
+            )
+
+        return AgentOutput(
+            response=final_response,
+            state=state,
+            steps=steps
+        )
+
+    def approve_plan(self, plan: Plan, user_id: str = "system", approve: bool = True) -> Plan:
+        """
+        Approve or reject a plan.
+
+        Args:
+            plan: The Plan to approve/reject
+            user_id: The user approving the plan
+            approve: Whether to approve the plan
+
+        Returns:
+            The updated Plan object
+        """
+        import datetime
+        plan.approved_at = datetime.datetime.now()
+        plan.user_id = user_id
+        plan.status = PlanStatus.APPROVED if approve else PlanStatus.REJECTED
+        return plan
+
+    def run_with_plan(self, input_text: str, auto_approve: bool = False) -> AgentOutput:
+        """
+        Run the agent using plan generation and execution flow.
+
+        This is the recommended method for Phase 5+ workflows.
+
+        Args:
+            input_text: The task description
+            auto_approve: If True, auto-approve plans (for testing)
+
+        Returns:
+            AgentOutput with the final result
+        """
+        # Step 1: Generate plan
+        plan = self.generate_plan(input_text)
+
+        # Step 2: Show plan for review
+        if self.verbose:
+            print(f"\n[GENERATED PLAN]")
+            print(f"Task: {plan.task}")
+            print(f"Status: {plan.status.value}")
+            print(f"Steps: {len(plan.steps)}")
+            for step in plan.steps:
+                print(f"  {step.step_number}. {step.description}")
+                print(f"     Tool: {step.tool_name}")
+                print(f"     Input: {step.input_data}")
+                print(f"     Expected: {step.expected_output}")
+            print()
+
+        # Step 3: Auto-approve if enabled or plan has no steps (direct response)
+        if auto_approve or len(plan.steps) == 0:
+            plan = self.approve_plan(plan, user_id="auto", approve=True)
+
+        # Step 4: Execute plan
+        return self.execute_plan(plan, user_approved=True)
+
+    def pause_for_input(self, prompt_id: str, message: str) -> Optional[str]:
+        """
+        Pause agent execution and wait for user input.
+
+        Args:
+            prompt_id: Unique identifier for the prompt
+            message: The message to display to the user
+
+        Returns:
+            User's input as a string, or None if cancelled
+        """
+        if INTERACTIVE_AVAILABLE:
+            return text_input(prompt_id, message)
+        else:
+            # Fallback to direct input
+            print(f"\n[PAUSE FOR INPUT: {prompt_id}]")
+            print(message)
+            return input("> ").strip()
+
+    def pause_for_confirmation(
+        self,
+        prompt_id: str,
+        message: str,
+        default_yes: bool = True,
+    ) -> bool:
+        """
+        Pause agent execution and ask for user confirmation.
+
+        Args:
+            prompt_id: Unique identifier for the prompt
+            message: The confirmation message to display
+            default_yes: Whether to default to yes
+
+        Returns:
+            True if confirmed, False otherwise
+        """
+        if INTERACTIVE_AVAILABLE:
+            return confirm(prompt_id, message, default_yes)
+        else:
+            # Fallback to direct input
+            print(f"\n[PAUSE FOR CONFIRMATION: {prompt_id}]")
+            print(message)
+            response = input("[y/n] ").strip().lower()
+            return response in ("y", "yes", "1")
+
+    def pause_for_selection(
+        self,
+        prompt_id: str,
+        message: str,
+        options: List[str],
+        default_index: int = 0,
+    ) -> Optional[str]:
+        """
+        Pause agent execution and ask user to select from options.
+
+        Args:
+            prompt_id: Unique identifier for the prompt
+            message: The selection prompt message
+            options: List of options to choose from
+            default_index: Index of default option
+
+        Returns:
+            Selected option, or None if cancelled
+        """
+        if INTERACTIVE_AVAILABLE:
+            return select(prompt_id, message, options, default_index)
+        else:
+            # Fallback to direct input
+            print(f"\n[PAUSE FOR SELECTION: {prompt_id}]")
+            print(message)
+            print("\nOptions:")
+            for i, option in enumerate(options, 1):
+                print(f"  {i}. {option}")
+            response = input("\nEnter choice (or q to quit): ").strip()
+            if response.lower() == "q":
+                return None
+            try:
+                idx = int(response) - 1
+                if 0 <= idx < len(options):
+                    return options[idx]
+            except ValueError:
+                pass
+            if response in options:
+                return response
+            return None
+
     def clear_memory(self) -> None:
         """Clear agent's memory."""
         self.short_term_memory.clear()
