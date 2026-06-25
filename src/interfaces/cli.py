@@ -4,7 +4,6 @@ Command-line interface for IndoClaw AI OS.
 
 import sys
 import os
-import argparse
 import json
 import warnings
 from typing import Optional, Dict, Any
@@ -56,10 +55,9 @@ from ..core.agent import IndoClawAgent, create_agent
 from ..agents.researcher import ResearcherAgent
 from ..agents.writer import WriterAgent
 from ..config.settings import settings
-from ..core.tools.web_search import WebSearchTool
-from ..core.tools.file_ops import FileOperationTool
-from ..core.tools.calculation import CalculatorTool
+from ..core.tools import _tool_registry as tool_registry
 from ..core.workspace import get_agent_config, ensure_agent_workspace
+from ..core.command_compiler import CommandParser, parse_command_line, print_help
 
 
 def input_with_validation(prompt_text: str, validator: Validator = None) -> str:
@@ -77,96 +75,103 @@ def input_with_validation(prompt_text: str, validator: Validator = None) -> str:
 
 class IndoClawCLI:
     """Command-line interface for IndoClaw."""
-    
+
     def __init__(self, verbose: bool = False, init_agent: bool = True, agent_name: str = None):
         self.verbose = verbose
         self.agent_name = agent_name or "default"
-        
+
         # Initialize console
         if RICH_AVAILABLE:
             self.console = Console()
         else:
             self.console = None
-        
+
         # Initialize agent (optional)
         self.agent = None
         self.agents = {}
         if init_agent:
             self._initialize_agent()
-    
+
     def _print_logo(self) -> None:
         """Print the IndoClaw ASCII logo in green color."""
-        logo = """
-[bold green]██╗███╗   ██╗██████╗  ██████╗  ██████╗██╗      █████╗ ██╗    ██╗
-██║████╗  ██║██╔══██╗██╔═══██╗██╔════╝██║     ██╔══██╗██║    ██║
-██║██╔██╗ ██║██║  ██║██║   ██║██║     ██║     ███████║██║ █╗ ██║
-██║██║╚██╗██║██║  ██║██║   ██║██║     ██║     ██╔══██║██║███╗██║
-██║██║ ╚████║██████╔╝╚██████╔╝╚██████╗███████╗██║  ██║╚███╔███╔╝
-╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝  ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝[/bold green] 
-               [bold green]                           [/bold green]      
-        """
+        logo = """[bold green]
+███████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+█▌                                                                                                               ▐█
+█▌                                                                                                               ▐█
+█▌   █████ ██████   █████ ██████████      ███████      █████████  █████         █████████   █████   ███   █████  ▐█
+█▌  ░░███ ░░██████ ░░███ ░░███░░░░███   ███░░░░░███   ███░░░░░███░░███         ███░░░░░███ ░░███   ░███  ░░███   ▐█
+█▌   ░███  ░███░███ ░███  ░███   ░░███ ███     ░░███ ███     ░░░  ░███        ░███    ░███  ░███   ░███   ░███   ▐█
+█▌   ░███  ░███░░███░███  ░███    ░███░███      ░███░███          ░███        ░███████████  ░███   ░███   ░███   ▐█
+█▌   ░███  ░███ ░░██████  ░███    ░███░███      ░███░███          ░███        ░███░░░░░███  ░░███  █████  ███    ▐█
+█▌   ░███  ░███  ░░█████  ░███    ███ ░░███     ███ ░░███     ███ ░███      █ ░███    ░███   ░░░█████░█████░     ▐█
+█▌   █████ █████  ░░█████ ██████████   ░░░███████░   ░░█████████  ███████████ █████   █████    ░░███ ░░███       ▐█
+█▌  ░░░░░ ░░░░░    ░░░░░ ░░░░░░░░░░      ░░░░░░░      ░░░░░░░░░  ░░░░░░░░░░░ ░░░░░   ░░░░░      ░░░   ░░░        ▐█
+█▌                                                                                                               ▐█
+█▌                                                                                                               ▐█
+███████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+[/bold green]"""
         if self.console:
             self.console.print(logo)
         else:
             # Fallback for non-Rich environments
             print(logo.replace("[bold green]", "").replace("[/bold green]", ""))
-    
+
     def _initialize_agent(self) -> None:
         """Initialize the main agent."""
         try:
             from src.core.workspace.config import get_agent_config
             from src.config.settings import Settings, LLMConfig, AgentConfig, ToolConfig, MemoryConfig
-            
+
             # Use self.agent_name directly (passed from __main__.py)
             agent_name = self.agent_name
             if not agent_name or agent_name == "default":
                 # Fallback to default agent name from settings
                 agent_name = settings.agent.name
-            
+
             # Load agent-specific config
             if agent_name and agent_name != "default":
                 config = get_agent_config(agent_name=agent_name).load()
                 if config:
                     agent_name = config.get("agent_name", agent_name)
-                    
+
                     # Reload settings with agent-specific config
                     llm_config = LLMConfig()
                     llm_config.model_name = config.get("llm_model", getattr(llm_config, 'model_name', None))
                     llm_config.base_url = config.get("llm_base_url", getattr(llm_config, 'base_url', None))
                     llm_config.api_key = config.get("llm_api_key", getattr(llm_config, 'api_key', None))
                     llm_config.ollama_enabled = config.get("ollama_enabled", getattr(llm_config, 'ollama_enabled', True))
-                    
+
                     agent_config = AgentConfig()
                     agent_config.name = config.get("agent_name", getattr(agent_config, 'name', None))
                     agent_config.role = config.get("agent_role", getattr(agent_config, 'role', None))
                     agent_config.max_iterations = config.get("max_iterations", getattr(agent_config, 'max_iterations', 10))
                     agent_config.verbose = config.get("verbose", getattr(agent_config, 'verbose', True))
-                    
+
                     tool_config = ToolConfig()
                     tool_config.show_tool_calling = config.get("show_tool_calling", getattr(tool_config, 'show_tool_calling', False))
                     tool_config.show_thinking = config.get("show_thinking", getattr(tool_config, 'show_thinking', False))
                     tool_config.thinking_enabled = config.get("thinking_enabled", getattr(tool_config, 'thinking_enabled', True))
-                    
+
                     memory_config = MemoryConfig()
                     memory_config.short_term_capacity = config.get("short_term_capacity", getattr(memory_config, 'short_term_capacity', 10))
                     memory_config.long_term_top_k = config.get("long_term_top_k", getattr(memory_config, 'long_term_top_k', 5))
                     memory_config.embedding_model = config.get("embedding_model", getattr(memory_config, 'embedding_model', None))
-                    
+
                     # Update global settings
                     settings.llm = llm_config
                     settings.agent = agent_config
                     settings.tool = tool_config
                     settings.memory = memory_config
-            
+
             self.agent = create_agent(
                 tools=None,  # Use default tools from settings
                 verbose=self.verbose
             )
             self.agents["default"] = self.agent
-            
+
             # Print logo and agent ready message
             self._print_logo()
-            
+
             if self.console:
                 self.console.print(
                     Panel.fit(
@@ -189,7 +194,7 @@ class IndoClawCLI:
                 )
             else:
                 print(f"Error: {e}")
-    
+
     def print_header(self) -> None:
         """Print the header."""
         if self.console:
@@ -205,7 +210,7 @@ class IndoClawCLI:
             print("IndoClaw - Autonomous AI Agent OS")
             print("Type 'exit' or 'quit' to close")
             print("=" * 50)
-    
+
     def print_response(self, response: str, title: str = "Response") -> None:
         """Print a response in a styled panel."""
         if self.console:
@@ -221,7 +226,7 @@ class IndoClawCLI:
             print("-" * 50)
             print(response)
             print("-" * 50)
-    
+
     def print_error(self, error: str) -> None:
         """Print an error message."""
         if self.console:
@@ -234,7 +239,7 @@ class IndoClawCLI:
             )
         else:
             print(f"Error: {error}")
-    
+
     def print_info(self, message: str) -> None:
         """Print an info message."""
         if self.console:
@@ -247,18 +252,18 @@ class IndoClawCLI:
             )
         else:
             print(f"Info: {message}")
-    
+
     def run_chat(self) -> None:
         """Run interactive chat mode."""
         self.print_header()
-        
+
         if PROMPT_TOOLKIT_AVAILABLE and RICH_AVAILABLE:
             session = PromptSession()
             style = Style.from_dict({
                 "prompt": "cyan bold",
                 "message": "green",
             })
-            
+
             while True:
                 try:
                     user_input = session.prompt(
@@ -267,7 +272,7 @@ class IndoClawCLI:
                     ).strip()
                 except (KeyboardInterrupt, EOFError):
                     break
-                
+
                 if not user_input:
                     continue
                 if user_input.lower() in ["exit", "quit", "q"]:
@@ -294,7 +299,7 @@ class IndoClawCLI:
                     self.print_response(result.response)
                 except Exception as e:
                     self.print_error(str(e))
-    
+
     def run_single(self, prompt: str) -> None:
         """Run a single prompt and exit."""
         try:
@@ -303,13 +308,13 @@ class IndoClawCLI:
         except Exception as e:
             self.print_error(str(e))
             sys.exit(1)
-    
+
     def run_research(self, topic: str) -> None:
         """Run a research task."""
         try:
             agent = ResearcherAgent(verbose=self.verbose)
             result = agent.research(topic)
-            
+
             if self.console:
                 self.console.print(
                     Panel.fit(
@@ -321,7 +326,7 @@ class IndoClawCLI:
                         border_style="green"
                     )
                 )
-                
+
                 if result.sources:
                     self.console.print(
                         Panel(
@@ -334,13 +339,13 @@ class IndoClawCLI:
                 print(f"Research complete: {result.summary}")
         except Exception as e:
             self.print_error(str(e))
-    
+
     def run_write(self, topic: str, format: str = "article") -> None:
         """Run a writing task."""
         try:
             agent = WriterAgent(verbose=self.verbose)
             result = agent.write(topic, format=format)
-            
+
             if self.console:
                 self.console.print(
                     Panel.fit(
@@ -357,11 +362,11 @@ class IndoClawCLI:
                 print(f"Writing complete: {result.content[:200]}..")
         except Exception as e:
             self.print_error(str(e))
-    
+
     def setup_agent(self, agent_name: str = None) -> None:
         """Run setup wizard for agent configuration."""
         self.print_header()
-        
+
         if self.console:
             self.console.print(
                 Panel(
@@ -375,39 +380,39 @@ class IndoClawCLI:
             print("Agent Setup Wizard")
             print("Configure your agent's settings.")
             print("=" * 50)
-        
+
         # Get or prompt for agent name
         if not agent_name:
             agent_name = input_with_validation("Enter agent name (default: default): ").strip()
             if not agent_name:
                 agent_name = "default"
-        
+
         # Get LLM provider
         if self.console:
             self.console.print("\n[bold]LLM Provider Configuration[/bold]")
-        
+
         llm_provider = input_with_validation("LLM Provider (ollama/openai, default: ollama): ").strip()
         if not llm_provider:
             llm_provider = "ollama"
-        
+
         # Get LLM model
         llm_model = input_with_validation(f"LLM Model (default: gemma4:26b for ollama): ").strip()
         if not llm_model:
             llm_model = "gemma4:26b"
-        
+
         # Get LLM base URL
         llm_base_url = input_with_validation("LLM Base URL (default: http://localhost:11434/v1): ").strip()
         if not llm_base_url:
             llm_base_url = "http://localhost:11434/v1"
-        
+
         # Get API key
         llm_api_key = input_with_validation("API Key (press Enter for none/ollama): ").strip() or None
-        
+
         # Get default channel
         default_channel = input_with_validation("Default channel (console/telegram, default: console): ").strip()
         if not default_channel:
             default_channel = "console"
-        
+
         # Build config
         config = {
             "agent_name": agent_name,
@@ -426,14 +431,14 @@ class IndoClawCLI:
             "embedding_model": "text-embedding-3-small",
             "ollama_enabled": llm_provider == "ollama"
         }
-        
+
         # Save config for this agent
         workspace_config = get_agent_config(agent_name=agent_name)
         workspace_config.save(config)
-        
+
         # Ensure workspace files exist
         ensure_agent_workspace(agent_name)
-        
+
         if self.console:
             self.console.print(
                 Panel.fit(
@@ -450,7 +455,7 @@ class IndoClawCLI:
             print(f"Config saved to: {workspace_config.workspace_dir}")
             print(f"LLM Provider: {llm_provider}")
             print(f"LLM Model: {llm_model}")
-    
+
     def run(self, prompt: str = None, chat: bool = True) -> None:
         """Run the CLI."""
         if prompt:
@@ -463,182 +468,161 @@ class IndoClawCLI:
 
 
 def main() -> None:
-    """Main entry point."""
-    import argparse
-    from pathlib import Path
-    
-    parser = argparse.ArgumentParser(
-        description="IndoClaw - Autonomous AI Agent OS",
-        add_help=False
-    )
-    parser.add_argument(
-        "--help", "-h",
-        action="store_true",
-        help="Show help message"
-    )
-    parser.add_argument(
-        "-r", "--research",
-        help="Run research on a topic"
-    )
-    parser.add_argument(
-        "-w", "--write",
-        help="Write content on a topic"
-    )
-    parser.add_argument(
-        "-f", "--format",
-        default="article",
-        help="Output format for writing (default: article)"
-    )
-    parser.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Enable verbose output"
-    )
-    parser.add_argument(
-        "--chat", "-c",
-        action="store_true",
-        help="Force chat mode"
-    )
-    parser.add_argument(
-        "--setup",
-        nargs="?",
-        const="default",
-        metavar="AGENT_NAME",
-        help="Run setup wizard for agent configuration"
-    )
-    parser.add_argument(
-        "--full",
-        action="store_true",
-        help="Completely remove IndoClaw folder (when used with uninstall)"
-    )
-    parser.add_argument(
-        "--check-config",
-        action="store_true",
-        help="Check if agent is configured (for internal use)"
-    )
-    
-    args, remaining = parser.parse_known_args()
-    
-    if args.help:
-        print("usage: indoclaw [-h] [--onboard] [command] [prompt]")
+    """Main entry point - uses CommandParser for clean command-based interface."""
+    from ..__main__ import is_onboarded, get_default_agent_name
+
+    # Parse commands using CommandParser
+    args = parse_command_line()
+
+    # Handle help
+    if args["help"]:
+        print_help()
+        return
+
+    # Check if agent is configured
+    if not is_onboarded():
         print()
-        print("IndoClaw - Autonomous AI Agent OS")
+        print("=" * 60)
+        print("  IndoClaw has not been configured yet.")
+        print("=" * 60)
         print()
-        print("positional arguments:")
-        print("  command    Command to run (onboard, research, write, or chat)")
-        print("  prompt     Prompt to process (if not provided, runs in chat mode)")
+        print("Please run 'indoclaw onboard' to configure your agent.")
         print()
-        print("optional arguments:")
-        print("  -h, --help  Show help message")
-        print("  --onboard   Run first-time setup wizard")
-        print()
-        print("commands:")
+        print("Available commands:")
         print("  onboard     Run first-time setup wizard")
+        print("  agent       Run with default agent")
         print("  research    Run research on a topic")
         print("  write       Write content on a topic")
-        print("  chat        Run in chat mode")
+        print("  list-tools  List all registered tools")
+        print("  list-agents List all registered agents")
+        print()
+        sys.exit(1)
+
+    # Get default agent name
+    agent_name = get_default_agent_name()
+
+    # Phase 2-4: Info commands (no agent initialization needed)
+    if args["command"] == "list-tools":
+        print("=== Registered Tools ===")
+        for name, desc in tool_registry.list_tools().items():
+            tool = tool_registry.get_tool(name)
+            print(f"  {name}: {desc}")
+            print(f"    Enabled: {tool.is_enabled()}, Has Schema: {tool.input_schema is not None}")
         return
-    
-    # Check if agent is configured (before initializing CLI)
-    if not args.check_config:
-        try:
-            from src.__main__ import is_onboarded
-            if not is_onboarded():
-                print()
-                print("=" * 60)
-                print("  IndoClaw has not been configured yet.")
-                print("=" * 60)
-                print()
-                print("Please run 'indoclaw onboard' to configure your agent.")
-                print()
-                print("Available commands:")
-                print("  onboard     Run first-time setup wizard")
-                print("  uninstall   Uninstall IndoClaw")
-                print("  setup [name]  Run setup wizard for specific agent")
-                print()
-                sys.exit(1)
-        except Exception as e:
-            pass
-    
-    # Parse remaining args for command
-    prompt = None  # Default prompt value
-    command = None  # Default command value
-    agent_name = None  # Agent name (if specified)
-    
-    # Get default agent name if not specified
-    from src.__main__ import get_default_agent_name
-    if not agent_name:
-        agent_name = get_default_agent_name()
-    
-    if remaining:
-        command = remaining[0] if remaining else None
-        prompt = remaining[1] if len(remaining) > 1 else None
-        
-        if command == "uninstall":
-            from ..__main__ import uninstall
-            uninstall(full=args.full if hasattr(args, 'full') else False)
-        elif command == "onboard":
-            run_onboard_cli()
-        elif command == "setup":
-            cli = IndoClawCLI(verbose=args.verbose, init_agent=False, agent_name=agent_name)
-            cli.setup_agent(args.setup)
-        elif command == "research":
-            cli = IndoClawCLI(verbose=args.verbose, init_agent=False, agent_name=agent_name)
+
+    if args["command"] == "list-agents":
+        from ..core.messaging import get_agent_registry
+        registry = get_agent_registry()
+        print("=== Registered Agents ===")
+        for name, info in registry.list_agents().items():
+            print(f"  {name}: {info['description']}")
+            print(f"    Role: {info['role']}")
+        return
+
+    # Phase 4: Trace command
+    if args["trace"]:
+        from ..core.observation import set_tracer_enabled
+        set_tracer_enabled(True)
+        print("Thought tracing enabled.")
+        if args["prompt"]:
+            print(f"Prompt: {args['prompt']}")
+        return
+
+    # Initialize CLI (agent initialization needed for most commands)
+    cli = IndoClawCLI(
+        verbose=args.get("verbose", False),
+        init_agent=args["command"] not in ("setup", "uninstall"),
+        agent_name=args.get("agent_name")
+    )
+
+    # Command routing
+    command = args["command"] or "agent"
+    subcommand = args["subcommand"]
+    prompt = args["prompt"]
+
+    if command == "agent":
+        # Default to chat if no subcommand specified
+        if subcommand is None:
+            subcommand = "chat"
+
+        if subcommand == "research" and prompt:
             cli.run_research(prompt)
-        elif command == "write":
-            cli = IndoClawCLI(verbose=args.verbose, init_agent=False, agent_name=agent_name)
-            cli.run_write(prompt, args.format)
-        elif command == "chat":
-            cli = IndoClawCLI(verbose=args.verbose, init_agent=False, agent_name=agent_name)
-            cli.run(chat=True)
+        elif subcommand == "write":
+            format_ = args.get("format", "article")
+            cli.run_write(prompt, format_)
         else:
-            cli = IndoClawCLI(verbose=args.verbose, init_agent=True, agent_name=agent_name)
-            cli.run(prompt=command if command else prompt, chat=not args.research and not args.write)
+            # Chat mode (default for 'agent')
+            cli.run()
+
+    elif command == "research":
+        cli.run_research(prompt or "")
+
+    elif command == "write":
+        format_ = args.get("format", "article")
+        cli.run_write(prompt or "", format_)
+
+    elif command == "chat":
+        cli.run()
+
+    elif command == "onboard":
+        from .cli import run_onboard_cli
+        run_onboard_cli()
+
+    elif command == "setup":
+        cli.setup_agent(args.get("agent_name"))
+
+    elif command == "uninstall":
+        from ..__main__ import uninstall
+        uninstall(full=args.get("options", {}).get("--full", False))
+
     else:
-        cli = IndoClawCLI(verbose=args.verbose, init_agent=True, agent_name=agent_name)
-        cli.run(prompt=prompt, chat=not args.research and not args.write)
+        # Fallback: treat command as prompt if no command matched
+        if command:
+            cli.run_single(command)
+        else:
+            cli.run()
 
 
 def run_onboard_cli() -> None:
     """Run the onboard process for first-time setup."""
     from src.core.workspace import get_agent_config, ensure_agent_workspace
     from ..interfaces.cli import input_with_validation
-    
+
     print("=" * 50)
     print("IndoClaw First-Time Setup")
     print("=" * 50)
     print()
     print("Welcome to IndoClaw! Let's configure your agent.")
     print()
-    
+
     # Get agent name
     agent_name = input_with_validation("Enter agent name (default: default): ").strip()
     if not agent_name:
         agent_name = "default"
-    
+
     # Get LLM provider
     llm_provider = input_with_validation("LLM Provider (ollama/openai, default: ollama): ").strip()
     if not llm_provider:
         llm_provider = "ollama"
-    
+
     # Get LLM model
     llm_model = input_with_validation(f"LLM Model (default: gemma4:26b for ollama): ").strip()
     if not llm_model:
         llm_model = "gemma4:26b"
-    
+
     # Get LLM base URL
     llm_base_url = input_with_validation("LLM Base URL (default: http://localhost:11434/v1): ").strip()
     if not llm_base_url:
         llm_base_url = "http://localhost:11434/v1"
-    
+
     # Get API key
     llm_api_key = input_with_validation("API Key (press Enter for none/ollama): ").strip() or None
-    
+
     # Get default channel
     default_channel = input_with_validation("Default channel (console/telegram, default: console): ").strip()
     if not default_channel:
         default_channel = "console"
-    
+
     # Build config
     config = {
         "agent_name": agent_name,
@@ -657,15 +641,15 @@ def run_onboard_cli() -> None:
         "embedding_model": "text-embedding-3-small",
         "ollama_enabled": llm_provider == "ollama"
     }
-    
+
     # Save config
     try:
         workspace_config = get_agent_config(agent_name=agent_name)
         workspace_config.save(config)
-        
+
         # Ensure workspace files exist
         ensure_agent_workspace(agent_name)
-        
+
         print()
         print("=" * 50)
         print("Setup Complete!")

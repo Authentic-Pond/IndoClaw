@@ -7,12 +7,134 @@ import os
 import warnings
 from pathlib import Path
 
+# Suppress ONNX Runtime warnings before any imports
+os.environ["ORT_LOG_LEVEL"] = "OFF"
+os.environ["ONNXRUNTIME_LOG_VERBOSITY_LEVEL"] = "0"
+
 # Suppress LangChain Pydantic compatibility warnings for Python 3.14+
 warnings.filterwarnings(
     "ignore",
     message="Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater",
     category=UserWarning
 )
+
+# Suppress ONNX Runtime GPU detection warnings (device discovery issues)
+warnings.filterwarnings(
+    "ignore",
+    message=".*Failed to detect devices under.*",
+    category=UserWarning
+)
+warnings.filterwarnings(
+    "ignore",
+    message=".*ReadFileContents Failed to open file.*",
+    category=UserWarning
+)
+warnings.filterwarnings(
+    "ignore",
+    message=".*device_discovery.*",
+    category=UserWarning
+)
+
+# Suppress all ONNX Runtime warnings
+warnings.filterwarnings(
+    "ignore",
+    message=".*onnxruntime.*",
+    category=UserWarning
+)
+warnings.filterwarnings(
+    "ignore",
+    message=".*onnx.*",
+    category=UserWarning
+)
+
+
+def _install_indoclaw():
+    """
+    Auto-install IndoClaw with all dependencies.
+    This is called when --install flag is used.
+    Installs to ~/.indoclaw directory.
+    """
+    import subprocess
+    import sys
+    import shutil
+    from pathlib import Path
+
+    print()
+    print("=" * 60)
+    print("    IndoClaw Auto-Install")
+    print("=" * 60)
+    print()
+
+    # Installation directory
+    indoclaw_dir = Path.home() / ".indoclaw"
+    venv_dir = indoclaw_dir / "venv"
+
+    print(f"Installation directory: {indoclaw_dir}")
+    print()
+
+    # Get the script directory (where this file is located)
+    script_dir = Path(__file__).parent.parent
+
+    # Copy source files to installation directory
+    print("Copying source files...")
+    if indoclaw_dir.exists():
+        shutil.rmtree(indoclaw_dir)
+    indoclaw_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy all files from script directory
+    for item in script_dir.iterdir():
+        if item.name in [".git", "__pycache__"]:
+            continue
+        dest = indoclaw_dir / item.name
+        if item.is_dir():
+            shutil.copytree(item, dest, ignore=shutil.ignore_patterns("__pycache__"))
+        else:
+            shutil.copy2(item, dest)
+
+    # Check for virtual environment
+    if venv_dir.exists():
+        print(f"Virtual environment already exists at {venv_dir}")
+        print("Reinstalling automatically...")
+        shutil.rmtree(venv_dir)
+        print("Old venv removed.")
+
+    # Create virtual environment
+    print("Creating virtual environment...")
+    subprocess.check_call([sys.executable, "-m", "venv", str(venv_dir)])
+
+    # Determine pip path
+    if sys.platform == "win32":
+        pip_path = venv_dir / "Scripts" / "pip"
+    else:
+        pip_path = venv_dir / "bin" / "pip"
+
+    # Upgrade pip
+    print("Upgrading pip...")
+    subprocess.check_call([str(pip_path), "install", "--upgrade", "pip"])
+
+    # Install IndoClaw package
+    print("Installing IndoClaw and dependencies...")
+    subprocess.check_call([str(pip_path), "install", "-e", str(indoclaw_dir)])
+
+    print()
+    print("=" * 60)
+    print("    Installation Complete!")
+    print("=" * 60)
+    print()
+    print("IndoClaw has been installed to:")
+    print(f"    {indoclaw_dir}")
+    print()
+    print("To use IndoClaw, add the virtual environment's bin directory to your PATH:")
+    print()
+    if sys.platform == "win32":
+        print(f'    set PATH="%PATH%:{venv_dir}\\Scripts"')
+    else:
+        print(f'    export PATH="$PATH:{venv_dir}/bin"')
+    print()
+    print("Add this line to your shell configuration file (~/.bashrc, ~/.zshrc, or ~/.profile)")
+    print("Then run: indoclaw --help")
+    print()
+
 
 # Try to import workspace config
 try:
@@ -475,11 +597,16 @@ def main() -> None:
         print_help()
         return
     
+    # Handle install flag (before parsing other options)
+    if "--install" in args_list:
+        _install_indoclaw()
+        return
+
     # Handle help flag
     if parsed.get("help"):
         print_help()
         return
-    
+
     # Extract parsed values
     command = parsed.get("command")
     agent_name = parsed.get("agent_name")
