@@ -21,6 +21,12 @@ except ImportError:
         logging.warning("duckduckgo_search package also not installed")
 
 from .base import BaseTool, ToolResult
+from pydantic import BaseModel, Field
+
+
+class SearchQuery(BaseModel):
+    """Schema for DuckDuckGo search query."""
+    query: str = Field(..., description="The search query string")
 
 
 @dataclass
@@ -34,34 +40,35 @@ class SearchResult:
 
 class DuckDuckGoSearchTool(BaseTool):
     """Search the web using DuckDuckGo."""
-    
+
     name = "duckduckgo_search"
     description = "Search the web using DuckDuckGo. Input should be a search query."
-    
+    input_schema = SearchQuery
+
     def __init__(self, max_results: int = 10):
         super().__init__()
         self.max_results = max_results
         self.enabled = DDGS_AVAILABLE
         self._ddgs = None  # Reuse DDGS instance for efficiency
-    
+
     def _get_ddgs(self):
         """Get or create DDGS instance."""
         if self._ddgs is None:
             self._ddgs = DDGS()
         return self._ddgs
-    
-    def execute(self, query: str) -> ToolResult:
+
+    def _run(self, query: str, **kwargs) -> ToolResult:
         """Execute a DuckDuckGo search."""
         if not DDGS_AVAILABLE:
             return ToolResult(
                 success=False,
                 error="duckduckgo-search package not installed. Run: pip install duckduckgo-search"
             )
-        
+
         try:
             ddgs = self._get_ddgs()
             results = list(ddgs.text(query, max_results=self.max_results))
-            
+
             if not results:
                 return ToolResult(
                     success=True,
@@ -70,7 +77,7 @@ class DuckDuckGoSearchTool(BaseTool):
                         "summary": "No results found for your query."
                     }
                 )
-            
+
             formatted_results = []
             for result in results:
                 formatted_results.append({
@@ -79,7 +86,7 @@ class DuckDuckGoSearchTool(BaseTool):
                     "snippet": result.get("body", ""),
                     "source": "duckduckgo"
                 })
-            
+
             return ToolResult(
                 success=True,
                 content={
@@ -87,13 +94,13 @@ class DuckDuckGoSearchTool(BaseTool):
                     "summary": f"Found {len(formatted_results)} results for '{query}'"
                 }
             )
-        
+
         except Exception as e:
             return ToolResult(
                 success=False,
                 error=f"DuckDuckGo search failed: {str(e)}"
             )
-    
+
     def close(self):
         """Close the DDGS session."""
         if self._ddgs is not None:
@@ -102,23 +109,23 @@ class DuckDuckGoSearchTool(BaseTool):
             except:
                 pass
             self._ddgs = None
-    
+
     def format_results(self, results: List[Dict[str, Any]]) -> str:
         """Format search results for display."""
         if not results:
             return "No results found."
-        
+
         output = []
         for i, result in enumerate(results, 1):
             title = result.get("title", "No title")
             url = result.get("url", "")
             snippet = result.get("snippet", "")
-            
+
             output.append(f"{i}. {title}")
             output.append(f"   URL: {url}")
             output.append(f"   Summary: {snippet[:200]}..." if len(snippet) > 200 else f"   Summary: {snippet}")
             output.append("")
-        
+
         return "\n".join(output)
 
 

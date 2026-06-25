@@ -16,42 +16,30 @@ try:
 except ImportError:
     CHROMA_AVAILABLE = False
 
-
-@dataclass
-class MemoryEntry:
-    """Represents a memory entry in long-term storage."""
-    id: str
-    content: str
-    embedding: Optional[List[float]] = None
-    metadata: Dict[str, Any] = None
-    timestamp: float = field(default_factory=time.time)
-    relevance_score: float = 0.0
-    
-    def __post_init__(self):
-        if self.metadata is None:
-            self.metadata = {}
+from .provider import BaseMemoryProvider, MemoryEntry
 
 
-class LongTermMemory:
-    """Manages long-term memory using vector embeddings."""
-    
+class LongTermMemory(BaseMemoryProvider):
+    """Manages long-term memory using vector embeddings (ChromaDB)."""
+
     def __init__(self, db_path: str = "./data/chroma", top_k: int = 5):
         self.db_path = db_path
         self.top_k = top_k
         self.client = None
         self.collection = None
+        self.fallback_file = None
+        self.fallback_data = {"memories": []}
         self._initialize()
-    
+
     def _initialize(self) -> None:
         """Initialize the vector database."""
         if not CHROMA_AVAILABLE:
             self._setup_fallback()
             return
-        
+
         os.makedirs(self.db_path, exist_ok=True)
-        
+
         try:
-            from chromadb.config import Settings as ChromaSettings
             self.client = ChromaClient(
                 ChromaSettings(
                     persist_directory=self.db_path,
@@ -65,7 +53,7 @@ class LongTermMemory:
         except Exception as e:
             print(f"Chroma initialization warning: {e}")
             self._setup_fallback()
-    
+
     def _setup_fallback(self) -> None:
         """Set up file-based fallback storage."""
         os.makedirs(self.db_path, exist_ok=True)
@@ -75,7 +63,7 @@ class LongTermMemory:
                 self.fallback_data = json.load(f)
         else:
             self.fallback_data = {"memories": []}
-    
+
     def add(self, content: str, metadata: Dict[str, Any] = None, embedding: List[float] = None) -> str:
         """Add a memory entry."""
         if self.client:
@@ -99,27 +87,28 @@ class LongTermMemory:
                 "timestamp": time.time()
             }
             self.fallback_data["memories"].append(entry)
-            with open(self.fallback_file, 'w') as f:
-                json.dump(self.fallback_data, f, indent=2)
+            if self.fallback_file:
+                with open(self.fallback_file, 'w') as f:
+                    json.dump(self.fallback_data, f, indent=2)
             return memory_id
-    
+
     def query(self, query_text: str, top_k: int = None) -> List[MemoryEntry]:
         """Query memories by semantic similarity."""
         if top_k is None:
             top_k = self.top_k
-        
+
         if self.client:
             results = self.collection.query(
                 query_texts=[query_text],
                 n_results=top_k
             )
-            
+
             entries = []
             for i, doc in enumerate(results['documents'][0]):
                 entry = MemoryEntry(
                     id=results['ids'][0][i],
                     content=doc,
-                    metadata=results['metadatas'][0][i],
+                    metadata=results['metadatas'][0][i] if results.get('metadatas') else {},
                     relevance_score=results['distances'][0][i] if results.get('distances') else 0.0
                 )
                 entries.append(entry)
@@ -127,21 +116,21 @@ class LongTermMemory:
         else:
             # Fallback: simple keyword matching
             return self._fallback_query(query_text, top_k)
-    
+
     def _fallback_query(self, query: str, top_k: int) -> List[MemoryEntry]:
         """Fallback keyword-based search."""
         memories = self.fallback_data.get("memories", [])
         query_words = set(query.lower().split())
-        
+
         scored = []
         for mem in memories:
             content_words = set(mem['content'].lower().split())
             intersection = len(query_words & content_words)
             score = intersection / len(query_words) if query_words else 0
             scored.append((score, mem))
-        
+
         scored.sort(key=lambda x: x[0], reverse=True)
-        
+
         entries = []
         for score, mem in scored[:top_k]:
             entry = MemoryEntry(
@@ -151,24 +140,96 @@ class LongTermMemory:
                 relevance_score=score
             )
             entries.append(entry)
-        
+
         return entries
-    
+
     def clear(self) -> None:
         """Clear all long-term memories."""
         if self.client:
             self.collection.delete(where={})
         else:
             self.fallback_data = {"memories": []}
-            with open(self.fallback_file, 'w') as f:
-                json.dump(self.fallback_data, f)
-    
+            if self.fallback_file:
+                with open(self.fallback_file, 'w') as f:
+                    json.dump(self.fallback_data, f)
+
     def count(self) -> int:
         """Return the number of stored memories."""
         if self.client:
             return self.collection.count()
         else:
             return len(self.fallback_data.get("memories", []))
+
+    def get(self, memory_id: str) -> Optional[MemoryEntry]:
+        """Retrieve a specific memory by ID."""
+        if self.client:
+            result = self.collection.get(ids=[memory_id])
+            if result and result['ids'] and len(result['ids']) > 0:
+                return MemoryEntry(
+                    id=result['ids'][0],
+                    content=result['documents'][0] if result.get('documents') else "",
+                    metadata=result['metadatas'][0] if result.get('metadatas') else {},
+                )
+            return None
+        else:
+            for mem in self.fallback_data.get("memories", []):
+                if mem['id'] == memory_id:
+                    return MemoryEntry(
+                        id=mem['id'],
+                        content=mem['content'],
+                        metadata=mem.get('metadata', {}),
+                        relevance_score=0.0
+                    )
+            return None
+
+    def delete(self, memory_id: str) -> bool:
+        """Delete a specific memory by ID."""
+        if self.client:
+            try:
+                self.collection.delete(ids=[memory_id])
+                return True
+            except Exception:
+                return False
+        else:
+            memories = self.fallback_data.get("memories", [])
+            original_len = len(memories)
+            self.fallback_data["memories"] = [m for m in memories if m['id'] != memory_id]
+            if self.fallback_file:
+                with open(self.fallback_file, 'w') as f:
+                    json.dump(self.fallback_data, f, indent=2)
+            return original_len != len(self.fallback_data["memories"])
+
+    def get_by_metadata(self, metadata_filter: Dict[str, Any]) -> List[MemoryEntry]:
+        """Query memories by metadata filters."""
+        if self.client:
+            # ChromaDB supports metadata filtering
+            result = self.collection.get(where=metadata_filter)
+            entries = []
+            for i, doc in enumerate(result['documents'] if result.get('documents') else []):
+                entries.append(MemoryEntry(
+                    id=result['ids'][i] if result.get('ids') else "",
+                    content=doc,
+                    metadata=result['metadatas'][i] if result.get('metadatas') else {},
+                ))
+            return entries
+        else:
+            # Fallback: simple keyword matching on metadata values
+            memories = self.fallback_data.get("memories", [])
+            entries = []
+            for mem in memories:
+                match = True
+                for key, value in metadata_filter.items():
+                    if mem.get('metadata', {}).get(key) != value:
+                        match = False
+                        break
+                if match:
+                    entries.append(MemoryEntry(
+                        id=mem['id'],
+                        content=mem['content'],
+                        metadata=mem.get('metadata', {}),
+                        relevance_score=0.0
+                    ))
+            return entries
 
 
 # Global instance

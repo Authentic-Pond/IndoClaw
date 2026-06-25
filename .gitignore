@@ -51,5 +51,10 @@ Thumbs.db
 # Website
 website/
 
+# Documentation (optional to exclude)
+CLAUDE.md
+MVP_ROADMAP.md
+CHANGELOG.md
+
 # License
 LICENSE
