@@ -585,25 +585,6 @@ def main() -> None:
         from ..__main__ import uninstall
         uninstall(full=args.get("options", {}).get("--full", False))
 
-    elif command == "web":
-        subcommand = args.get("subcommand")
-        # Get port from options dict
-        port = args.get("options", {}).get("--port")
-        if port:
-            port = int(port)
-        else:
-            port = 8000  # Default port
-
-        if subcommand == "start":
-            start_web_interface(port=port)
-        elif subcommand == "install":
-            install_web_interface()
-        elif subcommand == "stop":
-            stop_web_interface()
-        else:
-            # Default to start
-            start_web_interface(port=port)
-
     else:
         # Fallback: treat command as prompt if no command matched
         if command:
@@ -648,7 +629,7 @@ def run_onboard_cli() -> None:
     llm_api_key = input_with_validation("API Key (press Enter for none/ollama): ").strip() or None
 
     # Get default channel
-    default_channel = input_with_validation("Default channel (console/telegram, default: console): ").strip()
+    default_channel = input_with_validation("Default channel (console, default: console): ").strip()
     if not default_channel:
         default_channel = "console"
 
@@ -690,112 +671,6 @@ def run_onboard_cli() -> None:
         print()
     except Exception as e:
         print(f"Setup failed: {e}")
-
-
-def start_web_interface(port: int = 8000, host: str = "0.0.0.0") -> None:
-    """Start the web interface server."""
-    import subprocess
-    import sys
-    from subprocess import TimeoutExpired
-
-    print("\n" + "=" * 60)
-    print("  IndoClaw Web Interface")
-    print("=" * 60)
-    print(f"\nStarting FastAPI server on http://{host}:{port}")
-    print("Press Ctrl+C to stop the server")
-    print()
-
-    # Check if fastapi is installed
-    try:
-        import fastapi
-        import uvicorn
-    except ImportError:
-        print("Installing FastAPI and dependencies...")
-        subprocess.run([
-            sys.executable, "-m", "pip", "install", "-q",
-            "fastapi", "uvicorn", "python-multipart", "websockets"
-        ], check=True)
-
-    # Get the project root directory
-    script_dir = Path(__file__).parent.parent
-    project_root = script_dir.parent
-
-    # Start the FastAPI server with proper signal handling
-    process = None
-
-    try:
-        process = subprocess.Popen([
-            sys.executable, "-m", "uvicorn",
-            "src.interfaces.web.server.main:app",
-            "--host", host, "--port", str(port), "--reload"
-        ], cwd=str(project_root))
-
-        # Wait for process to complete
-        # Use poll() in a loop to allow KeyboardInterrupt to be detected
-        while process.poll() is None:
-            import time
-            time.sleep(0.1)
-
-    except KeyboardInterrupt:
-        # KeyboardInterrupt from Ctrl+C - uvicorn handles shutdown gracefully
-        # Just exit since the server is already shutting down
-        pass
-
-    except Exception as e:
-        print(f"Error starting web interface: {e}")
-        if process:
-            try:
-                process.terminate()
-                process.wait(timeout=5)
-            except TimeoutExpired:
-                process.kill()
-        raise
-
-
-def install_web_interface() -> None:
-    """Install the web interface dependencies."""
-    import subprocess
-    import sys
-
-    print("\n" + "=" * 60)
-    print("  Installing IndoClaw Web Interface")
-    print("=" * 60)
-    print()
-
-    # Install backend dependencies
-    print("Installing FastAPI and dependencies...")
-    subprocess.run([
-        sys.executable, "-m", "pip", "install", "-q",
-        "fastapi", "uvicorn", "python-multipart", "websockets"
-    ], check=True)
-
-    print("\nWeb interface dependencies installed successfully!")
-    print("Run 'indoclaw web start' to start the server.")
-
-
-def stop_web_interface() -> None:
-    """Stop the running web interface server."""
-    print("\n" + "=" * 60)
-    print("  Stopping IndoClaw Web Interface")
-    print("=" * 60)
-    print()
-
-    if not PSUTIL_AVAILABLE:
-        print("psutil not available. Please stop the server manually.")
-        print("Try: pkill -f uvicorn")
-        return
-
-    # Find and kill uvicorn processes
-    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
-        try:
-            cmdline = proc.info.get("cmdline", [])
-            if cmdline and "uvicorn" in " ".join(cmdline):
-                print(f"Stopping process {proc.pid}")
-                proc.send_signal(psutil.signal.SIGTERM)
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
-
-    print("Web interface stopped.")
 
 
 if __name__ == "__main__":

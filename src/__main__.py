@@ -642,28 +642,6 @@ def main() -> None:
         uninstall(full=full_remove)
         return
 
-    # Handle web command
-    if command == "web":
-        subcommand = parsed.get("subcommand")
-        port = options.get("--port")
-        if port:
-            port = int(port)
-        else:
-            port = 8000  # Default port
-
-        from src.interfaces.cli import start_web_interface, install_web_interface, stop_web_interface
-
-        if subcommand == "start":
-            start_web_interface(port=port)
-        elif subcommand == "install":
-            install_web_interface()
-        elif subcommand == "stop":
-            stop_web_interface()
-        else:
-            # Default to start
-            start_web_interface(port=port)
-        return
-
     # Check if command is actually an agent name (folder exists in workspaces)
     # This handles cases like "indoclaw klnd" where klnd is an agent name
     if not command and not agent_name and parsed.get("prompt"):
