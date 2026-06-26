@@ -97,6 +97,13 @@ async def get_config():
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    """Return a simple response for favicon requests to avoid 404s."""
+    from fastapi.responses import Response
+    return Response(status_code=204)
+
+
 # Serve static files
 @app.get("/{full_path:path}")
 async def serve_static(request: Request, full_path: str):

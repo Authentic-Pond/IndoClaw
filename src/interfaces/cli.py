@@ -696,7 +696,7 @@ def start_web_interface(port: int = 8000, host: str = "0.0.0.0") -> None:
     """Start the web interface server."""
     import subprocess
     import sys
-    import os
+    from subprocess import TimeoutExpired
 
     print("\n" + "=" * 60)
     print("  IndoClaw Web Interface")
@@ -720,12 +720,36 @@ def start_web_interface(port: int = 8000, host: str = "0.0.0.0") -> None:
     script_dir = Path(__file__).parent.parent
     project_root = script_dir.parent
 
-    # Start the FastAPI server
-    subprocess.run([
-        sys.executable, "-m", "uvicorn",
-        "src.interfaces.web.server.main:app",
-        "--host", host, "--port", str(port), "--reload"
-    ], cwd=str(project_root), check=True)
+    # Start the FastAPI server with proper signal handling
+    process = None
+
+    try:
+        process = subprocess.Popen([
+            sys.executable, "-m", "uvicorn",
+            "src.interfaces.web.server.main:app",
+            "--host", host, "--port", str(port), "--reload"
+        ], cwd=str(project_root))
+
+        # Wait for process to complete
+        # Use poll() in a loop to allow KeyboardInterrupt to be detected
+        while process.poll() is None:
+            import time
+            time.sleep(0.1)
+
+    except KeyboardInterrupt:
+        # KeyboardInterrupt from Ctrl+C - uvicorn handles shutdown gracefully
+        # Just exit since the server is already shutting down
+        pass
+
+    except Exception as e:
+        print(f"Error starting web interface: {e}")
+        if process:
+            try:
+                process.terminate()
+                process.wait(timeout=5)
+            except TimeoutExpired:
+                process.kill()
+        raise
 
 
 def install_web_interface() -> None:
