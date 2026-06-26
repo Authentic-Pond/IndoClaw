@@ -13,14 +13,17 @@ class CommandParser:
     # Primary commands
     COMMANDS = {
         "agent", "onboard", "setup", "research", "write",
-        "chat", "uninstall", "reset", "list-tools", "list-agents"
+        "chat", "uninstall", "reset", "list-tools", "list-agents", "web"
     }
 
     # Secondary commands (after 'agent')
     AGENT_COMMANDS = {"research", "write", "chat"}
 
+    # Secondary commands (after 'web')
+    WEB_COMMANDS = {"start", "install", "stop"}
+
     # Options that take values (short and long forms)
-    OPTIONS_WITH_VALUE = {"-a", "--agent", "-f", "--format"}
+    OPTIONS_WITH_VALUE = {"-a", "--agent", "-f", "--format", "--port"}
 
     # Flag options without values
     FLAG_OPTIONS = {"-h", "--help", "-v", "--verbose", "--full", "--trace", "--chat", "--install"}
@@ -120,6 +123,16 @@ class CommandParser:
                         # It's an agent name
                         self.result["agent_name"] = next_arg
                         i += 1
+                    continue
+
+                # For 'web' command, check for subcommand (start/install/stop)
+                if arg == "web" and i < len(self.args):
+                    next_arg = self.args[i]
+                    if next_arg in self.WEB_COMMANDS:
+                        self.result["subcommand"] = next_arg
+                        i += 1
+                    continue
+
                 continue
 
             # Options with -- prefix and = format
@@ -233,10 +246,13 @@ Commands:
     List all registered agents (Phase 3)
   uninstall [--full]
     Uninstall IndoClaw (remove configurations or full install)
+  web [start|install|stop] [--port <port>]
+    Start, install, or stop the web interface (Phase 7)
 
 Options:
   -a, --agent <name>   Run with specified agent
   -f, --format <fmt>   Output format for writing (default: article)
+  --port <number>      Port for web interface
   -v, --verbose        Enable verbose output
   --trace              Enable thought tracing (Phase 4)
   --install            Auto-install IndoClaw with dependencies
@@ -250,6 +266,8 @@ Examples:
   indoclaw research "Latest AI developments"
   indoclaw list-tools
   indoclaw list-agents
+  indoclaw web start
+  indoclaw web start --port 3000
 
 Installation:
   indoclaw --install   Auto-install to venv and show PATH instructions

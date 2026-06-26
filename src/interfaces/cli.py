@@ -6,6 +6,8 @@ import sys
 import os
 import json
 import warnings
+import subprocess
+from pathlib import Path
 from typing import Optional, Dict, Any
 
 # Suppress LangChain Pydantic compatibility warnings for Python 3.14+
@@ -58,6 +60,14 @@ from ..config.settings import settings
 from ..core.tools import _tool_registry as tool_registry
 from ..core.workspace import get_agent_config, ensure_agent_workspace
 from ..core.command_compiler import CommandParser, parse_command_line, print_help
+
+
+# Import psutil for process management
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
 
 
 def input_with_validation(prompt_text: str, validator: Validator = None) -> str:
@@ -575,6 +585,25 @@ def main() -> None:
         from ..__main__ import uninstall
         uninstall(full=args.get("options", {}).get("--full", False))
 
+    elif command == "web":
+        subcommand = args.get("subcommand")
+        # Get port from options dict
+        port = args.get("options", {}).get("--port")
+        if port:
+            port = int(port)
+        else:
+            port = 8000  # Default port
+
+        if subcommand == "start":
+            start_web_interface(port=port)
+        elif subcommand == "install":
+            install_web_interface()
+        elif subcommand == "stop":
+            stop_web_interface()
+        else:
+            # Default to start
+            start_web_interface(port=port)
+
     else:
         # Fallback: treat command as prompt if no command matched
         if command:
@@ -661,6 +690,88 @@ def run_onboard_cli() -> None:
         print()
     except Exception as e:
         print(f"Setup failed: {e}")
+
+
+def start_web_interface(port: int = 8000, host: str = "0.0.0.0") -> None:
+    """Start the web interface server."""
+    import subprocess
+    import sys
+    import os
+
+    print("\n" + "=" * 60)
+    print("  IndoClaw Web Interface")
+    print("=" * 60)
+    print(f"\nStarting FastAPI server on http://{host}:{port}")
+    print("Press Ctrl+C to stop the server")
+    print()
+
+    # Check if fastapi is installed
+    try:
+        import fastapi
+        import uvicorn
+    except ImportError:
+        print("Installing FastAPI and dependencies...")
+        subprocess.run([
+            sys.executable, "-m", "pip", "install", "-q",
+            "fastapi", "uvicorn", "python-multipart", "websockets"
+        ], check=True)
+
+    # Get the project root directory
+    script_dir = Path(__file__).parent.parent
+    project_root = script_dir.parent
+
+    # Start the FastAPI server
+    subprocess.run([
+        sys.executable, "-m", "uvicorn",
+        "src.interfaces.web.server.main:app",
+        "--host", host, "--port", str(port), "--reload"
+    ], cwd=str(project_root), check=True)
+
+
+def install_web_interface() -> None:
+    """Install the web interface dependencies."""
+    import subprocess
+    import sys
+
+    print("\n" + "=" * 60)
+    print("  Installing IndoClaw Web Interface")
+    print("=" * 60)
+    print()
+
+    # Install backend dependencies
+    print("Installing FastAPI and dependencies...")
+    subprocess.run([
+        sys.executable, "-m", "pip", "install", "-q",
+        "fastapi", "uvicorn", "python-multipart", "websockets"
+    ], check=True)
+
+    print("\nWeb interface dependencies installed successfully!")
+    print("Run 'indoclaw web start' to start the server.")
+
+
+def stop_web_interface() -> None:
+    """Stop the running web interface server."""
+    print("\n" + "=" * 60)
+    print("  Stopping IndoClaw Web Interface")
+    print("=" * 60)
+    print()
+
+    if not PSUTIL_AVAILABLE:
+        print("psutil not available. Please stop the server manually.")
+        print("Try: pkill -f uvicorn")
+        return
+
+    # Find and kill uvicorn processes
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+        try:
+            cmdline = proc.info.get("cmdline", [])
+            if cmdline and "uvicorn" in " ".join(cmdline):
+                print(f"Stopping process {proc.pid}")
+                proc.send_signal(psutil.signal.SIGTERM)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+    print("Web interface stopped.")
 
 
 if __name__ == "__main__":
