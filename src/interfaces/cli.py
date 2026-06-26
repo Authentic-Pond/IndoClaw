@@ -575,12 +575,114 @@ def main() -> None:
         from ..__main__ import uninstall
         uninstall(full=args.get("options", {}).get("--full", False))
 
+    elif command == "web":
+        subcommand = args.get("subcommand")
+        if subcommand == "start":
+            start_web_interface(port=args.get("port", 3000))
+        elif subcommand == "install":
+            install_web_interface()
+        elif subcommand == "stop":
+            stop_web_interface()
+        else:
+            start_web_interface(port=args.get("port", 3000))
+
     else:
         # Fallback: treat command as prompt if no command matched
         if command:
             cli.run_single(command)
         else:
             cli.run()
+
+
+def start_web_interface(port: int = 3000, host: str = "0.0.0.0") -> None:
+    """Start the web interface server."""
+    import subprocess
+    import sys
+    import os
+
+    web_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "server")
+
+    if not os.path.exists(web_dir):
+        print("\n" + "=" * 60)
+        print("  Web interface not found!")
+        print("=" * 60)
+        print("\nPlease run 'indoclaw web install' first to install the web interface.")
+        print()
+        return
+
+    print("\n" + "=" * 60)
+    print("  Starting IndoClaw Web Interface")
+    print("=" * 60)
+    print(f"\nURL: http://localhost:{port}")
+    print("Press Ctrl+C to stop the server")
+    print()
+
+    # Check if fastapi is installed
+    try:
+        import fastapi
+    except ImportError:
+        print("Installing FastAPI and dependencies...")
+        subprocess.run([
+            sys.executable, "-m", "pip", "install", "-q",
+            "fastapi", "uvicorn", "python-multipart", "websockets"
+        ], check=True)
+
+    # Start the FastAPI server
+    subprocess.run([
+        sys.executable, "-m", "uvicorn", "src.interfaces.web.server.main:app",
+        "--host", host, "--port", str(port), "--reload"
+    ], cwd=os.path.dirname(os.path.dirname(os.path.dirname(__file__))), check=True)
+
+
+def install_web_interface() -> None:
+    """Install the web interface dependencies."""
+    import subprocess
+    import sys
+
+    print("\n" + "=" * 60)
+    print("  Installing IndoClaw Web Interface")
+    print("=" * 60)
+    print()
+
+    # Install frontend dependencies
+    client_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "client")
+    print("Installing frontend dependencies...")
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "next"], check=False)
+
+    # Install backend dependencies
+    server_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "server")
+    print("Installing backend dependencies...")
+    subprocess.run([
+        sys.executable, "-m", "pip", "install", "-q",
+        "fastapi", "uvicorn", "python-multipart", "websockets"
+    ], check=True)
+
+    print("\nWeb interface installed successfully!")
+    print("Run 'indoclaw web start' to start the server.")
+
+
+def stop_web_interface() -> None:
+    """Stop the running web interface server."""
+    import os
+    import signal
+    import psutil
+
+    print("\n" + "=" * 60)
+    print("  Stopping IndoClaw Web Interface")
+    print("=" * 60)
+    print()
+
+    # Find and kill uvicorn processes
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+        try:
+            cmdline = proc.info.get("cmdline", [])
+            if cmdline and "uvicorn" in " ".join(cmdline):
+                print(f"Stopping process {proc.pid}")
+                proc.send_signal(signal.SIGTERM)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+    print("Web interface stopped.")
 
 
 def run_onboard_cli() -> None:

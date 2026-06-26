@@ -152,6 +152,23 @@ set PATH="%PATH%;C:\path\to\IndoClaw\venv\Scripts"
 
 ## Usage
 
+### Web Interface (Recommended for New Users)
+
+IndoClaw now includes a modern web interface for managing agents, chat, and configuration:
+
+```bash
+# Start the web interface (requires FastAPI)
+indoclaw web start
+
+# Install web interface dependencies first (if needed)
+indoclaw web install
+
+# Stop the web interface
+indoclaw web stop
+```
+
+Access the web interface at `http://localhost:8000` (or the port you specify).
+
 ### Command Line Interface (after installation)
 
 ```bash
@@ -486,6 +503,9 @@ src/
 │   ├── tools/          # Tool implementations
 │   └── workspace/      # Agent workspace management
 ├── interfaces/         # CLI and other interfaces
+│   └── web/            # Web interface (Next.js + FastAPI)
+│       ├── client/     # Next.js frontend
+│       └── server/     # FastAPI backend
 └── models/             # Data models
 ```
 
