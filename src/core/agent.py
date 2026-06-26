@@ -179,7 +179,7 @@ class IndoClawAgent:
             self._event_publisher = EventPublisher()
 
         if APPROVAL_AVAILABLE:
-            from ..approval.auto_approval import AutoApprovalProvider
+            from .approval.auto_approval import AutoApprovalProvider
             self._approval_provider = AutoApprovalProvider()
             # Configure tools with approval provider
             for tool in self.tools:
